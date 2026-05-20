@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Charlotte Design System Showcase</title>
+  <!-- Link directly to workspace stylesheet -->
+  <link rel="stylesheet" href="./src/index.css">
+  <style>
+    /* Showcase-specific layout additions */
+    .showcase-wrapper {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 2.5rem;
+    }
+
+    .showcase-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--card-border);
+      flex-wrap: wrap;
+      gap: 1.5rem;
+    }
+
+    .showcase-controls {
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+      flex-wrap: wrap;
+    }
+
+    .section-title {
+      font-family: var(--font-heading);
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .section-title::after {
+      content: '';
+      flex-grow: 1;
+      height: 1px;
+      background: var(--card-border);
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+
+    @media (max-width: 768px) {
+      .grid-2 {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Elegant Theme Selector Pill Styles */
+    .theme-selector-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .theme-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 0.85rem;
+      border: 1px solid var(--card-border);
+      background: var(--card-bg);
+      border-radius: 50px;
+      color: var(--text-primary);
+      font-size: 0.825rem;
+      font-weight: 500;
+      font-family: var(--font-heading);
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .theme-pill:hover {
+      border-color: var(--accent-teal);
+      transform: translateY(-1px);
+    }
+
+    .theme-pill.active {
+      border-color: var(--accent-teal);
+      background: var(--card-bg);
+      box-shadow: var(--border-glow);
+      font-weight: 600;
+    }
+
+    .theme-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    /* Shimmering placeholders inside grid */
+    .demo-skeleton {
+      display: none;
+    }
+
+    .badge-completed {
+      background: hsla(142, 72%, 40%, 0.1);
+      border: 1px solid hsla(142, 72%, 40%, 0.2);
+      color: var(--success);
+      padding: 0.25rem 0.5rem;
+      border-radius: var(--border-radius-sm);
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .badge-active {
+      background: hsla(172, 77%, 42%, 0.1);
+      border: 1px solid hsla(172, 77%, 42%, 0.2);
+      color: var(--accent-teal);
+      padding: 0.25rem 0.5rem;
+      border-radius: var(--border-radius-sm);
+      font-size: 0.75rem;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="showcase-wrapper">
+    
+    <!-- BRAND HEADER & PREMIUM THEME SWAPPER GROUP -->
+    <header class="showcase-header">
+      <div class="logo-container" style="margin-bottom: 0;">
+        <div class="logo-icon">C</div>
+        <div class="logo-text">Charlotte.ai</div>
+        <span class="status-badge" style="margin-left: 1rem;">
+          <span class="pulse-dot"></span> Webhook Online
+        </span>
+      </div>
+      
+      <div class="showcase-controls">
+        <!-- Theme Selector Group -->
+        <div class="theme-selector-group">
+          <button class="theme-pill active" data-theme-val="">
+            <span class="theme-dot" style="background-color: hsl(172, 77%, 42%);"></span>Midnight Blue
+          </button>
+          <button class="theme-pill" data-theme-val="terracotta">
+            <span class="theme-dot" style="background-color: hsl(14, 75%, 55%);"></span>Warm Terracotta
+          </button>
+          <button class="theme-pill" data-theme-val="spruce">
+            <span class="theme-dot" style="background-color: hsl(158, 65%, 42%);"></span>Nordic Spruce
+          </button>
+          <button class="theme-pill" data-theme-val="amethyst">
+            <span class="theme-dot" style="background-color: hsl(272, 75%, 62%);"></span>Royal Amethyst
+          </button>
+          <button class="theme-pill" data-theme-val="obsidian">
+            <span class="theme-dot" style="background-color: hsl(343, 78%, 55%);"></span>Obsidian Rose
+          </button>
+          <button class="theme-pill" data-theme-val="light">
+            <span class="theme-dot" style="background-color: hsl(172, 80%, 35%);"></span>Warm Ivory
+          </button>
+        </div>
+
+        <button id="skeleton-toggle" class="secondary-btn" aria-pressed="false" style="padding: 0.5rem 1rem; font-size: 0.85rem;">Toggle Loading State</button>
+      </div>
+    </header>
+
+    <!-- METRICS GRID -->
+    <section>
+      <h2 class="section-title">Metrics Card Grid</h2>
+      <div class="metric-grid">
+        <!-- Card 1 -->
+        <div class="glass-card metric-card interactive">
+          <div class="metric-info">
+            <span class="metric-label">Answer Rate</span>
+            <span class="metric-value">98.4%</span>
+            <span class="metric-trend trend-up">↑ 1.2% this week</span>
+          </div>
+          <div class="metric-icon-wrapper">✓</div>
+        </div>
+        <!-- Card 2 -->
+        <div class="glass-card metric-card interactive">
+          <div class="metric-info">
+            <span class="metric-label">Avg Duration</span>
+            <span class="metric-value">2m 14s</span>
+            <span class="metric-trend text-secondary" style="font-size: 0.8rem;">Target: < 3m 00s</span>
+          </div>
+          <div class="metric-icon-wrapper">⏱</div>
+        </div>
+        <!-- Card 3 -->
+        <div class="glass-card metric-card interactive">
+          <div class="metric-info">
+            <span class="metric-label">Inbound Calls</span>
+            <span class="metric-value">124</span>
+            <span class="metric-trend trend-up">↑ 12% vs last month</span>
+          </div>
+          <div class="metric-icon-wrapper">☎</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- WORKSPACE SAMPLES & INTERACTIVE LOGS -->
+    <div class="grid-2">
+      
+      <!-- BUTTONS & INPUT FIELDS (Left) -->
+      <section style="display: flex; flex-direction: column; gap: 1.5rem;">
+        <div>
+          <h2 class="section-title">Glass Cards & CTA Inputs</h2>
+          <div class="glass-card hover-lift" style="display: flex; flex-direction: column; gap: 1.25rem;">
+            <h3>Try Charlotte's Form Interactions</h3>
+            <p style="color: var(--text-secondary); font-size: 0.9rem;">
+              Fill in your temporary forwarding target to test the friendly focus ring highlight states.
+            </p>
+            
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label">Forwarding Phone Number</label>
+              <input type="text" class="input-field" placeholder="e.g., (512) 555-9999">
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label">Fallback Receptionist Role</label>
+              <input type="text" class="input-field" placeholder="e.g., Office Support Team">
+            </div>
+
+            <div style="display: flex; gap: 1rem; margin-top: 0.5rem;">
+              <button class="gradient-btn">Save Changes</button>
+              <button class="secondary-btn">Cancel</button>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h2 class="section-title">State-bound Button Variants</h2>
+          <div class="glass-card" style="display: flex; flex-wrap: wrap; gap: 1rem;">
+            <button class="gradient-btn">Primary Action</button>
+            <button class="secondary-btn">Secondary Soft</button>
+            <button class="gradient-btn" style="opacity: 0.5; cursor: not-allowed;" disabled>Disabled Action</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- LIVE TRANSCRIPT CHAT BOX (Right - Now styled fully via CSS variables in index.css) -->
+      <section style="display: flex; flex-direction: column;">
+        <h2 class="section-title">Live Interactive Call Transcript</h2>
+        <div class="glass-card" style="flex-grow: 1; display: flex; flex-direction: column; gap: 1.5rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <h3 style="font-size: 1.1rem;">Call Session: +1 (512) 555-0199</h3>
+              <p style="color: var(--text-secondary); font-size: 0.8rem;">Tenant: Brown Consulting • Caller: Michael</p>
+            </div>
+            <span class="badge-active"><span class="pulse-dot"></span> Streaming</span>
+          </div>
+
+          <!-- Transcript components now use standardized variable classes -->
+          <div class="transcript-box">
+            <!-- Bubble 1 -->
+            <div class="speech-bubble charlotte">
+              <span class="speaker-label">Charlotte (Virtual Helper)</span>
+              Hi there! Thank you for calling Brown Consulting. I'm Charlotte, your virtual receptionist. How can I help you support your business today?
+            </div>
+            <!-- Bubble 2 -->
+            <div class="speech-bubble caller">
+              <span class="speaker-label">Michael (Caller)</span>
+              Hi Charlotte, I wanted to check your operating hours and if you have any consultation slots open this afternoon.
+            </div>
+            <!-- Bubble 3 -->
+            <div class="speech-bubble charlotte">
+              <span class="speaker-label">Charlotte (Virtual Helper)</span>
+              We are open from Monday to Friday, 9:00 AM to 5:00 PM CST. I can see a couple of slots available for a cloud architecture consultation at 2:00 PM and 3:30 PM today. Would you like me to book one of those for you?
+            </div>
+            <!-- Bubble 4 -->
+            <div class="speech-bubble caller">
+              <span class="speaker-label">Michael (Caller)</span>
+              Yes, please book the 2:00 PM slot under Michael!
+            </div>
+            <!-- Bubble 5 -->
+            <div class="speech-bubble charlotte">
+              <span class="speaker-label">Charlotte (Virtual Helper)</span>
+              Perfect, Michael! I have provisionally reserved the 2:00 PM slot for you. A confirmation link has been sent to your mobile. I'm always here if you need anything else!
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- CALL LOG TABLE & SKELETON DEMO -->
+    <section>
+      <h2 class="section-title">Call Logs Table & Shimmer Skeletons</h2>
+      
+      <!-- Normal Logs content container -->
+      <div class="demo-content glass-card" style="padding: 1rem;">
+        <div class="table-container">
+          <table class="custom-table">
+            <thead>
+              <tr>
+                <th>Caller</th>
+                <th>Time & Date</th>
+                <th>Duration</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Michael Brown</td>
+                <td>Today, 11:34 AM</td>
+                <td>2m 15s</td>
+                <td><span class="badge-completed">Completed</span></td>
+              </tr>
+              <tr>
+                <td>Alice Green</td>
+                <td>Today, 10:12 AM</td>
+                <td>1m 05s</td>
+                <td><span class="badge-active"><span class="pulse-dot"></span> Active Stream</span></td>
+              </tr>
+              <tr>
+                <td>Robert Vance</td>
+                <td>Yesterday, 4:45 PM</td>
+                <td>3m 40s</td>
+                <td><span class="badge-completed">Completed</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Shimmer loading state container -->
+      <div class="demo-skeleton glass-card" style="padding: 2.5rem; display: flex; flex-direction: column; gap: 1.5rem;">
+        <div class="skeleton" style="width: 30%; height: 1.5rem; margin-bottom: 1rem;"></div>
+        <div style="display: flex; flex-direction: column; gap: 1rem;">
+          <div class="skeleton" style="width: 100%; height: 2rem;"></div>
+          <div class="skeleton" style="width: 100%; height: 2rem;"></div>
+          <div class="skeleton" style="width: 100%; height: 2rem;"></div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- EMBEDDED JS INTERACTIVITY CONTROLS -->
+  <script>
+    // Theme Selector Group JS Functionality
+    const themePills = document.querySelectorAll('.theme-pill');
+
+    // Function to apply a theme state
+    function applyTheme(themeValue) {
+      if (themeValue) {
+        document.documentElement.setAttribute('data-theme', themeValue);
+      } else {
+        document.documentElement.removeAttribute('data-theme');
+      }
+      
+      // Sync active classes across theme switcher UI
+      themePills.forEach(pill => {
+        if (pill.getAttribute('data-theme-val') === themeValue) {
+          pill.classList.add('active');
+        } else {
+          pill.classList.remove('active');
+        }
+      });
+    }
+
+    // Load and restore persisted theme from localStorage
+    const savedTheme = localStorage.getItem('charlotte-showcase-theme') || '';
+    applyTheme(savedTheme);
+
+    // Click listeners for all 6 theme pills
+    themePills.forEach(pill => {
+      pill.addEventListener('click', () => {
+        const themeValue = pill.getAttribute('data-theme-val');
+        applyTheme(themeValue);
+        localStorage.setItem('charlotte-showcase-theme', themeValue);
+      });
+    });
+
+    // Skeleton Shimmer State Switcher
+    const skeletonToggle = document.getElementById('skeleton-toggle');
+    const normalView = document.querySelectorAll('.demo-content');
+    const skeletonView = document.querySelectorAll('.demo-skeleton');
+
+    skeletonToggle.addEventListener('click', () => {
+      const isPressed = skeletonToggle.getAttribute('aria-pressed') === 'true';
+      skeletonToggle.setAttribute('aria-pressed', !isPressed);
+
+      if (!isPressed) {
+        // Switch to shimmer skeletons
+        normalView.forEach(el => el.style.display = 'none');
+        skeletonView.forEach(el => el.style.display = 'block');
+        skeletonToggle.textContent = 'Show Real Content';
+        skeletonToggle.classList.add('active');
+        skeletonToggle.style.borderColor = 'var(--accent-teal)';
+      } else {
+        // Switch to real logs table
+        normalView.forEach(el => el.style.display = 'block');
+        skeletonView.forEach(el => el.style.display = 'none');
+        skeletonToggle.textContent = 'Toggle Loading State';
+        skeletonToggle.classList.remove('active');
+        skeletonToggle.style.borderColor = 'var(--card-border)';
+      }
+    });
+  </script>
+</body>
+</html>
