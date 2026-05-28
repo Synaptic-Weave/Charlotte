@@ -29,7 +29,7 @@ export function createNumbersRouter(em: EntityManager): Router {
       }
 
       const results = await runInTenantTransaction(em, async (txEm) => {
-        const phoneNumbers = await txEm.find(TwilioPhoneNumber, {});
+        const phoneNumbers = await txEm.find(TwilioPhoneNumber, { tenant: { id: tenantId } } as any);
         return phoneNumbers.map((num) => ({
           id: num.id,
           phoneNumber: num.phoneNumber,
