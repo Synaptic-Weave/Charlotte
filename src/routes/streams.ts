@@ -1,4 +1,4 @@
-import { WebSocket, WebSocketServer } from 'ws';
+import { WebSocket, WebSocketServer, RawData } from 'ws';
 import { IncomingMessage } from 'http';
 import { EntityManager } from '@mikro-orm/postgresql';
 import twilio from 'twilio';
@@ -40,9 +40,10 @@ export function registerStreamHandler(wss: WebSocketServer, em: EntityManager): 
     let dialedNumber: string | null = null;
     let leftoverSamples: Int16Array = new Int16Array(0);
 
-    ws.on('message', async (message: string) => {
+    ws.on('message', async (message: RawData) => {
       try {
-        const msg = JSON.parse(message);
+        const raw = typeof message === 'string' ? message : message.toString();
+        const msg = JSON.parse(raw);
 
         switch (msg.event) {
           case 'connected':
