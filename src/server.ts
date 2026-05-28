@@ -66,17 +66,24 @@ async function bootstrap() {
   // Graceful Shutdown
   const gracefulShutdown = async (signal: string) => {
     console.log(`\nReceived ${signal}. Starting graceful shutdown...`);
-    
+
+    // Terminate all active WebSocket connections so their close handlers
+    // (which update CallSession state in DB) run before the HTTP server closes.
+    wss.clients.forEach((client) => client.terminate());
+    wss.close(() => {
+      console.log('WebSocket server closed.');
+    });
+
     // Stop accepting new connections
     server.close(async () => {
       console.log('HTTP server stopped.');
-      
+
       // Close database connection
       if (orm) {
         await orm.close(true);
         console.log('Database connection closed.');
       }
-      
+
       console.log('Shutdown complete. Exiting.');
       process.exit(0);
     });
