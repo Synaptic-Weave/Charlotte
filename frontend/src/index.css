@@ -377,6 +377,48 @@ h1, h2, h3, h4, h5, h6 {
   stroke: var(--accent-teal);
 }
 
+/* Aesthetic Themes Switcher */
+.theme-pill {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  justify-content: flex-start;
+  padding: 0.45rem 0.75rem;
+  border-radius: var(--border-radius-sm);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-heading);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: left;
+}
+
+.theme-pill:hover {
+  color: var(--text-primary);
+  border-color: var(--card-border);
+  background: hsla(210, 40%, 98%, 0.05);
+}
+
+.theme-pill.active {
+  color: var(--text-primary);
+  border-color: var(--accent-teal);
+  background: var(--card-bg) !important;
+  box-shadow: var(--border-glow);
+  font-weight: 600;
+}
+
+.theme-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 0.5rem;
+  flex-shrink: 0;
+}
+
 .sidebar-footer {
   margin-top: auto;
   display: flex;

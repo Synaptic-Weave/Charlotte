@@ -42,7 +42,7 @@ graph TD
 ```
 
 ### 3.1. Tenant Registration & Authentication
-*   **REQ-3.1.1 (Identity Provider Integration):** The frontend MUST leverage a secure Identity Provider (such as Firebase Auth or Auth0) to manage user credentials, multi-factor authentication (MFA), and password resets.
+*   **REQ-3.1.1 (Identity Provider Integration):** The frontend MUST leverage a secure Identity Provider (specifically Google Cloud Identity Platform or Google Cloud OAuth) to manage user credentials, multi-factor authentication (MFA), and password resets.
 *   **REQ-3.1.2 (Tenant Account Creation):** Upon registration, the backend MUST generate a unique, non-guessable UUID `tenant_id` representing the business's data isolation boundary.
 *   **REQ-3.1.3 (Role-Based Access Control):** Every user account MUST be bound to a `tenant_id` via a pivot table. The system MUST support at least three roles:
     *   `Owner`: Full billing, member management, agent setup, and number provisioning capabilities.

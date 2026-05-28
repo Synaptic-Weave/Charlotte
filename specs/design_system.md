@@ -45,7 +45,7 @@ graph TD
     classDef external fill:#15172a,stroke:#94a3b8,stroke-width:1px,color:#94a3b8;
 
     A[Visitor on Charlotte.ai] -->|Click Get Started| B(1. Sign Up Screen)
-    B -->|Firebase Authentication| C(2. Create Workspace Form)
+    B -->|GCP Identity Platform / Google OAuth| C(2. Create Workspace Form)
     C -->|Generate Unique tenant_id| D[3. Subscription Plan Selection]
     D -->|Stripe Checkout Flow| E(4. Number Provisioning Wizard)
     
@@ -67,7 +67,7 @@ graph TD
 ```
 
 ### Flow Details:
-1. **User Sign Up:** Leverages Firebase Authentication (JWT token-based). The JWT contains custom claims matching the user's role and `tenant_id`.
+1. **User Sign Up:** Leverages GCP Identity Platform / Google Cloud OAuth (JWT token-based). The JWT contains custom claims matching the user's role and `tenant_id`.
 2. **Workspace Creation:** Creates a clean, isolated Postgres row in the `tenants` table. No database resources are shared without strict foreign key filtering.
 3. **Plan Selection:** Stripe checkout links billing details to prevent invalid signups.
 4. **Number Provisioning Wizard:** Standardized on US/CA numbers to bypass regulatory address verification requirements. The backend dynamically creates an isolated Twilio Sub-Account (**Option B**) to track independent logs, billing, and credentials.
@@ -223,7 +223,7 @@ frontend/src/
 │       ├── NumberSearchGrid.tsx (Twilio Available Numbers results)
 │       └── ProvisioningModal.tsx (Transaction agreement and progress tracking)
 └── pages/
-    ├── Login.tsx (Firebase sign-in and OAuth)
+    ├── Login.tsx (GCP Identity Platform and Google OAuth)
     ├── Dashboard.tsx (Call metrics grid, Live Logs Table, active session queries)
     ├── NumberWizardPage.tsx (Onboarding multi-step phone provisioning screen)
     └── Settings.tsx (Brain Config system instructions editor, human handoff configs)
@@ -314,6 +314,6 @@ Designing the multi-tenant UX architecture for Charlotte felt less like construc
 
 From a user journey perspective, the telecom configuration has historically been the place where software onboarding goes to die. Complex regulatory paperwork, area code mappings, and slow backend API delays usually terrify business owners. By wrapping Twilio’s programmatic sub-account provisioning pipeline into an approachable three-step wizard, we transformed a frustrating administrative task into a delightful experience. Business owners can search for local or toll-free numbers, check total costs in a glassmorphic confirmation modal, and watch a friendly micro-animated loader complete the purchase—providing a live, customized, AI-driven phone agent in under five minutes.
 
-Under the hood, the frontend ties seamlessly into a highly modern React provider structure that respects secure tenant boundaries, utilizing the Google Agent Development Kit (ADK) and Firebase Auth. Each user flow and screen layout has been meticulously architected so that data isolation is robust and clear. The final product is a perfect fusion of aesthetic visual cues, empathetic micro-copy, and bulletproof engineering interfaces—giving business owners a premium dashboard where they feel supported, in control, and proud to have Charlotte welcoming their customers.
+Under the hood, the frontend ties seamlessly into a highly modern React provider structure that respects secure tenant boundaries, utilizing the Google Agent Development Kit (ADK) and GCP Identity Platform (Google Cloud Identity). Each user flow and screen layout has been meticulously architected so that data isolation is robust and clear. The final product is a perfect fusion of aesthetic visual cues, empathetic micro-copy, and bulletproof engineering interfaces—giving business owners a premium dashboard where they feel supported, in control, and proud to have Charlotte welcoming their customers.
 
 **— Trinity, UX Architect for Charlotte**
