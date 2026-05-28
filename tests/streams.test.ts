@@ -13,6 +13,7 @@ import { UserSchema } from '../src/domain/schemas/User.schema.js';
 import { OrganizationSchema } from '../src/domain/schemas/Organization.schema.js';
 import { TwilioPhoneNumberSchema } from '../src/domain/schemas/TwilioPhoneNumber.schema.js';
 import { CallSessionSchema } from '../src/domain/schemas/CallSession.schema.js';
+import { tenantLocalStorage, runInTenantTransaction } from '../src/db/context.js';
 import {
   decodeMuLawBuffer,
   encodeMuLawBuffer,
@@ -109,12 +110,16 @@ describe('Charlotte Telephony Inbound Call Webhook & WebSocket Media Stream Brid
       await fork.nativeDelete(Tenant, { id: { $in: exTenants.map((t) => t.id) } });
     }
 
-    // 3. Seed Tenant & Phone Number
+    // 3. Seed Tenant & Phone Number inside RLS context so the seed path
+    //    exercises the same application data path as production writes.
     testTenant = Tenant.create('Voice Test Tenant Ltd', '+15559990000');
-    testPhoneNumber = TwilioPhoneNumber.create(testTenant, '+15125550200', 'Voice Testing Number');
-
-    await fork.persist([testTenant, testPhoneNumber]);
-    await fork.flush();
+    await tenantLocalStorage.run({ tenantId: testTenant.id }, async () => {
+      await runInTenantTransaction(orm.em, async (txEm) => {
+        testPhoneNumber = TwilioPhoneNumber.create(testTenant, '+15125550200', 'Voice Testing Number');
+        txEm.persist([testTenant, testPhoneNumber]);
+        await txEm.flush();
+      });
+    });
     console.log(`[Test Setup] Seeded Tenant ${testTenant.id} with Twilio Number ${testPhoneNumber.phoneNumber}`);
 
     // 4. Initialize Express application and HTTP server
