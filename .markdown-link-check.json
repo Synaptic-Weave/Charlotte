@@ -15,6 +15,10 @@
     {
       "pattern": "^https?://.*\\.ngrok",
       "comment": "Ngrok tunnels are ephemeral and environment-specific"
+    },
+    {
+      "pattern": "^https://github\\.com/Synaptic-Weave/",
+      "comment": "Private repo URLs return 404 without auth token — skip in CI"
     }
   ],
   "timeout": "20s",
