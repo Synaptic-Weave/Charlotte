@@ -14,7 +14,7 @@ const twilioClient = isTwilioConfigured ? twilio(accountSid, authToken) : null;
 // Setup Twilio webhook validator middleware
 const validateTwilio = (req: any, res: any, next: any) => {
   const authToken = process.env.TWILIO_AUTH_TOKEN;
-  if (process.env.NODE_ENV !== 'production' || !authToken) {
+  if (!authToken) {
     return next();
   }
 
