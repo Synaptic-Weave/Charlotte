@@ -11,6 +11,7 @@ export class CallSession {
   status: CallSessionStatus;
   callerNumber: string;
   messages: any[];
+  recordingUrl: string | null;
   readonly createdAt: Date;
   updatedAt: Date;
 
@@ -22,6 +23,7 @@ export class CallSession {
     status: CallSessionStatus,
     callerNumber: string,
     messages: any[],
+    recordingUrl: string | null,
     createdAt: Date,
     updatedAt: Date
   ) {
@@ -32,6 +34,7 @@ export class CallSession {
     this.status = status;
     this.callerNumber = callerNumber;
     this.messages = messages;
+    this.recordingUrl = recordingUrl;
     this.createdAt = createdAt;
     this.updatedAt = updatedAt;
   }
@@ -46,6 +49,7 @@ export class CallSession {
       'initiated',
       callerNumber,
       [],
+      null,
       now,
       now
     );
@@ -61,11 +65,16 @@ export class CallSession {
     this.updatedAt = new Date();
   }
 
+<<<<<<< HEAD
   addMessage(msg: { id: string; speaker: 'charlotte' | 'caller'; text: string; timestamp?: string }): void {
     if (!this.messages) {
       this.messages = [];
     }
     this.messages.push(msg);
+=======
+  updateRecordingUrl(recordingUrl: string): void {
+    this.recordingUrl = recordingUrl;
+>>>>>>> b67ea74 (fix: persist voicemail recording URL on CallSession (closes #13))
     this.updatedAt = new Date();
   }
 }

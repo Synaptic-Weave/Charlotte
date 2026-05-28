@@ -13,6 +13,7 @@ export const CallSessionSchema = new EntitySchema<CallSession>({
     status: { type: 'string' },
     callerNumber: { type: 'string', default: 'Unknown' },
     messages: { type: 'json', nullable: true },
+    recordingUrl: { type: 'string', nullable: true },
     createdAt: { type: 'Date' },
     updatedAt: { type: 'Date', onUpdate: () => new Date() },
   },
