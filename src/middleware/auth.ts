@@ -30,7 +30,7 @@ export function authenticateToken(req: Request, res: Response, next: NextFunctio
 
   jwt.verify(token, JWT_SECRET, (err, decoded) => {
     if (err) {
-      res.status(403).json({ error: 'Invalid or expired authentication token.' });
+      res.status(401).json({ error: 'Invalid or expired authentication token.' });
       return;
     }
 
@@ -41,7 +41,7 @@ export function authenticateToken(req: Request, res: Response, next: NextFunctio
     };
 
     if (!payload.tenantId || !payload.userId) {
-      res.status(403).json({ error: 'Token is missing tenant or user claim attributes.' });
+      res.status(401).json({ error: 'Token is missing tenant or user claim attributes.' });
       return;
     }
 
