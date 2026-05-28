@@ -2,6 +2,8 @@ import { WebSocket, WebSocketServer, RawData } from 'ws';
 import { IncomingMessage } from 'http';
 import { EntityManager } from '@mikro-orm/postgresql';
 import twilio from 'twilio';
+// Uses the Google GenAI SDK directly for Gemini Live voice streaming.
+// TODO: migrate to @google/adk once ADK supports real-time audio bidirectional streaming.
 import { GoogleGenAI } from '@google/genai';
 import jwt from 'jsonwebtoken';
 import { Tenant } from '../domain/entities/Tenant.js';
