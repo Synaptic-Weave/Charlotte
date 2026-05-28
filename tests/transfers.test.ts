@@ -156,7 +156,7 @@ describe('Charlotte Warm Transfer & Call Bridging Integration Tests', () => {
 
     // 3. Seed active tenant with destination number
     testTenant = Tenant.create('Warm Transfer Test Tenant Ltd', '+15551234567');
-    testTenant.destinationVerified = true;
+    testTenant.updateDestination('+15551234567', true);
     testPhoneNumber = TwilioPhoneNumber.create(testTenant, '+15125550300', 'Transfer Test Line');
 
     await fork.persist([testTenant, testPhoneNumber]);
