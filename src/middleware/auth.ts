@@ -11,8 +11,12 @@ declare global {
   }
 }
 
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) throw new Error('JWT_SECRET environment variable is required');
+function requireEnv(key: string): string {
+  const val = process.env[key];
+  if (!val) throw new Error(`${key} environment variable is required`);
+  return val;
+}
+const JWT_SECRET = requireEnv('JWT_SECRET');
 
 /**
  * Express middleware to authenticate users via JWT and scope the current execution thread
