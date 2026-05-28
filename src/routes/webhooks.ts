@@ -5,6 +5,16 @@ import { TwilioPhoneNumber } from '../domain/entities/TwilioPhoneNumber.js';
 import { CallSession } from '../domain/entities/CallSession.js';
 import { tenantLocalStorage, runInTenantTransaction } from '../db/context.js';
 
+// Escape user-controlled strings before interpolating into TwiML XML
+function escapeXml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
 // Setup Twilio Client
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
@@ -150,7 +160,7 @@ export function createWebhooksRouter(em: EntityManager): Router {
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Gather action="/api/webhook/twilio/transfer-decision?inboundCallSid=${inboundCallSid}&amp;department=${encodeURIComponent(department)}" numDigits="1" timeout="10">
-    <Say voice="Polly.Joanna-Neural">You have an incoming call from Charlotte for the ${department} department. Press 1 to accept this call, or press 2 to send it to voicemail.</Say>
+    <Say voice="Polly.Joanna-Neural">You have an incoming call from Charlotte for the ${escapeXml(department)} department. Press 1 to accept this call, or press 2 to send it to voicemail.</Say>
   </Gather>
   <Redirect>/api/webhook/twilio/transfer-decision?inboundCallSid=${inboundCallSid}&amp;department=${encodeURIComponent(department)}&amp;timeout=true</Redirect>
 </Response>`;
@@ -209,7 +219,7 @@ export function createWebhooksRouter(em: EntityManager): Router {
           await twilioClient.calls(inboundCallSid).update({
             twiml: `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="Polly.Joanna-Neural">I'm sorry, but no one is available in the ${department} department right now. Please leave a message after the tone.</Say>
+  <Say voice="Polly.Joanna-Neural">I'm sorry, but no one is available in the ${escapeXml(department)} department right now. Please leave a message after the tone.</Say>
   <Record action="/api/webhook/twilio/voicemail-callback?inboundCallSid=${inboundCallSid}" maxLength="60" playBeep="true" />
 </Response>`
           });
