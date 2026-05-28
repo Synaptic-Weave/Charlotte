@@ -394,12 +394,13 @@ Never tell the caller to call another number or try another way; always use the 
                               if (twilioClient && callSid && activeTenant) {
                                 try {
                                   console.log(`[Twilio REST] Putting inbound caller ${callSid} into conference Conf_${callSid}...`);
+                                  const holdMusicUrl = process.env.HOLD_MUSIC_URL || 'https://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestain-MM-MAMBO.mp3';
                                   await twilioClient.calls(callSid).update({
                                     twiml: `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say voice="Polly.Joanna-Neural">Please hold for just a moment while I connect your call to the ${department} department.</Say>
   <Dial>
-    <Conference waitUrl="http://twimlets.com/holdmusic?Bucket=com.twilio.music.classical" startConferenceOnEnter="false" endConferenceOnExit="true">Conf_${callSid}</Conference>
+    <Conference waitUrl="${holdMusicUrl}" startConferenceOnEnter="false" endConferenceOnExit="true">Conf_${callSid}</Conference>
   </Dial>
 </Response>`
                                   });
