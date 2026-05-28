@@ -241,7 +241,7 @@ export function createWebhooksRouter(em: EntityManager): Router {
 
   /**
    * POST /api/webhook/twilio/voicemail-callback
-   * Receives voicemail recording URL and logs details.
+   * Receives voicemail recording URL and persists it on the CallSession.
    */
   router.post('/twilio/voicemail-callback', validateTwilio, async (req, res) => {
     try {
@@ -250,6 +250,29 @@ export function createWebhooksRouter(em: EntityManager): Router {
       const recordingDuration = req.body.RecordingDuration as string;
 
       console.log(`[Webhook] Voicemail received. InboundCallSid: ${inboundCallSid}, RecordingUrl: ${recordingUrl}, Duration: ${recordingDuration}s`);
+
+      // Persist the recording URL on the CallSession record
+      if (inboundCallSid && recordingUrl) {
+        // Use an admin fork (no tenant context) to resolve the session and its tenant
+        const adminFork = em.fork();
+        const callSession = await adminFork.findOne(CallSession, { callSid: inboundCallSid }, { populate: ['tenant'] as any });
+        if (callSession) {
+          const tenantId = callSession.tenant.id;
+          await tenantLocalStorage.run({ tenantId }, async () => {
+            await runInTenantTransaction(em, async (txEm) => {
+              const session = await txEm.findOne(CallSession, { callSid: inboundCallSid });
+              if (session) {
+                session.updateRecordingUrl(recordingUrl);
+                txEm.persist(session);
+                await txEm.flush();
+                console.log(`[Webhook] Persisted recording URL for CallSession ${session.id}.`);
+              }
+            });
+          });
+        } else {
+          console.warn(`[Webhook] CallSession not found for CallSid: ${inboundCallSid}. Recording URL not persisted.`);
+        }
+      }
 
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
