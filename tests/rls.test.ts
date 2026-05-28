@@ -6,10 +6,12 @@ import { Tenant } from '../src/domain/entities/Tenant.js';
 import { User } from '../src/domain/entities/User.js';
 import { Organization } from '../src/domain/entities/Organization.js';
 import { TwilioPhoneNumber } from '../src/domain/entities/TwilioPhoneNumber.js';
+import { CallSession } from '../src/domain/entities/CallSession.js';
 import { TenantSchema } from '../src/domain/schemas/Tenant.schema.js';
 import { UserSchema } from '../src/domain/schemas/User.schema.js';
 import { OrganizationSchema } from '../src/domain/schemas/Organization.schema.js';
 import { TwilioPhoneNumberSchema } from '../src/domain/schemas/TwilioPhoneNumber.schema.js';
+import { CallSessionSchema } from '../src/domain/schemas/CallSession.schema.js';
 import { tenantLocalStorage, runInTenantTransaction } from '../src/db/context.js';
 
 // Self-healing database connection discovery helper (superuser/owner context)
@@ -99,6 +101,8 @@ describe('PostgreSQL Row-Level Security (RLS) Integration Tests', () => {
   let userB: User;
   let orgA: Organization;
   let orgB: Organization;
+  let sessionA: CallSession;
+  let sessionB: CallSession;
 
   beforeAll(async () => {
     // 1. Establish database connection and verify/create database (using superuser/owner)
@@ -108,8 +112,8 @@ describe('PostgreSQL Row-Level Security (RLS) Integration Tests', () => {
     const superOrm = await MikroORM.init({
       ...config,
       clientUrl: dbSuperUrl,
-      entities: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema],
-      entitiesTs: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema],
+      entities: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema, CallSessionSchema],
+      entitiesTs: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema, CallSessionSchema],
     });
 
     try {
@@ -123,12 +127,14 @@ describe('PostgreSQL Row-Level Security (RLS) Integration Tests', () => {
       await superOrm.em.execute('ALTER TABLE users ENABLE ROW LEVEL SECURITY;');
       await superOrm.em.execute('ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;');
       await superOrm.em.execute('ALTER TABLE twilio_phone_numbers ENABLE ROW LEVEL SECURITY;');
-      
+      await superOrm.em.execute('ALTER TABLE call_sessions ENABLE ROW LEVEL SECURITY;');
+
       // Force RLS on owners/superusers for completeness
       await superOrm.em.execute('ALTER TABLE tenants FORCE ROW LEVEL SECURITY;');
       await superOrm.em.execute('ALTER TABLE users FORCE ROW LEVEL SECURITY;');
       await superOrm.em.execute('ALTER TABLE organizations FORCE ROW LEVEL SECURITY;');
       await superOrm.em.execute('ALTER TABLE twilio_phone_numbers FORCE ROW LEVEL SECURITY;');
+      await superOrm.em.execute('ALTER TABLE call_sessions FORCE ROW LEVEL SECURITY;');
     } finally {
       await superOrm.close();
     }
@@ -157,8 +163,8 @@ describe('PostgreSQL Row-Level Security (RLS) Integration Tests', () => {
     orm = await MikroORM.init({
       ...config,
       clientUrl: workingUrl,
-      entities: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema],
-      entitiesTs: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema],
+      entities: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema, CallSessionSchema],
+      entitiesTs: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema, CallSessionSchema],
     });
 
     // 5. Seed Isolated Tenant A Data
@@ -168,8 +174,9 @@ describe('PostgreSQL Row-Level Security (RLS) Integration Tests', () => {
         userA = User.create(tenantA, 'admin@acme.com', 'hashed_pwd_acme', 'admin');
         orgA = Organization.create(tenantA, 'Acme Engineering');
         const phoneA = TwilioPhoneNumber.create(tenantA, '+15125550100', 'Acme Hotline');
-        
-        txEm.persist([tenantA, userA, orgA, phoneA]);
+        sessionA = CallSession.create(tenantA, 'CA_RLS_TEST_ACME_001');
+
+        txEm.persist([tenantA, userA, orgA, phoneA, sessionA]);
         await txEm.flush();
       });
     });
@@ -181,8 +188,9 @@ describe('PostgreSQL Row-Level Security (RLS) Integration Tests', () => {
         userB = User.create(tenantB, 'admin@stark.com', 'hashed_pwd_stark', 'admin');
         orgB = Organization.create(tenantB, 'Stark R&D');
         const phoneB = TwilioPhoneNumber.create(tenantB, '+15125550101', 'Stark Hotline');
-        
-        txEm.persist([tenantB, userB, orgB, phoneB]);
+        sessionB = CallSession.create(tenantB, 'CA_RLS_TEST_STARK_001');
+
+        txEm.persist([tenantB, userB, orgB, phoneB, sessionB]);
         await txEm.flush();
       });
     });
@@ -207,6 +215,7 @@ describe('PostgreSQL Row-Level Security (RLS) Integration Tests', () => {
           await superClient.query('ALTER TABLE users DISABLE ROW LEVEL SECURITY;');
           await superClient.query('ALTER TABLE organizations DISABLE ROW LEVEL SECURITY;');
           await superClient.query('ALTER TABLE twilio_phone_numbers DISABLE ROW LEVEL SECURITY;');
+          await superClient.query('ALTER TABLE call_sessions DISABLE ROW LEVEL SECURITY;');
           
           if (tenantA && tenantB) {
             const res = await superClient.query(
@@ -221,6 +230,7 @@ describe('PostgreSQL Row-Level Security (RLS) Integration Tests', () => {
           await superClient.query('ALTER TABLE users ENABLE ROW LEVEL SECURITY;');
           await superClient.query('ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;');
           await superClient.query('ALTER TABLE twilio_phone_numbers ENABLE ROW LEVEL SECURITY;');
+          await superClient.query('ALTER TABLE call_sessions ENABLE ROW LEVEL SECURITY;');
 
           // Drop the temporary test role
           await superClient.query('DROP OWNED BY charlotte_test_role;');
@@ -262,6 +272,12 @@ describe('PostgreSQL Row-Level Security (RLS) Integration Tests', () => {
         expect(phones[0].phoneNumber).toBe('+15125550100');
         expect(phones[0].friendlyName).toBe('Acme Hotline');
 
+        // Query Tenant A call sessions
+        const sessionsA = await txEm.find(CallSession, {});
+        expect(sessionsA.length).toBe(1);
+        expect(sessionsA[0].id).toBe(sessionA.id);
+        expect(sessionsA[0].callSid).toBe('CA_RLS_TEST_ACME_001');
+
         // Double check we cannot find Tenant B's records even if we query by id explicitly
         const starkTenant = await txEm.findOne(Tenant, { id: tenantB.id });
         expect(starkTenant).toBeNull();
@@ -274,6 +290,9 @@ describe('PostgreSQL Row-Level Security (RLS) Integration Tests', () => {
 
         const starkPhone = await txEm.findOne(TwilioPhoneNumber, { phoneNumber: '+15125550101' });
         expect(starkPhone).toBeNull();
+
+        const starkSession = await txEm.findOne(CallSession, { id: sessionB.id });
+        expect(starkSession).toBeNull();
       });
     });
   });
@@ -305,6 +324,12 @@ describe('PostgreSQL Row-Level Security (RLS) Integration Tests', () => {
         expect(phones[0].phoneNumber).toBe('+15125550101');
         expect(phones[0].friendlyName).toBe('Stark Hotline');
 
+        // Query Tenant B call sessions
+        const sessionsB = await txEm.find(CallSession, {});
+        expect(sessionsB.length).toBe(1);
+        expect(sessionsB[0].id).toBe(sessionB.id);
+        expect(sessionsB[0].callSid).toBe('CA_RLS_TEST_STARK_001');
+
         // Double check we cannot find Tenant A's records even if we query by id explicitly
         const acmeTenant = await txEm.findOne(Tenant, { id: tenantA.id });
         expect(acmeTenant).toBeNull();
@@ -317,6 +342,9 @@ describe('PostgreSQL Row-Level Security (RLS) Integration Tests', () => {
 
         const acmePhone = await txEm.findOne(TwilioPhoneNumber, { phoneNumber: '+15125550100' });
         expect(acmePhone).toBeNull();
+
+        const acmeSession = await txEm.findOne(CallSession, { id: sessionA.id });
+        expect(acmeSession).toBeNull();
       });
     });
   });
@@ -345,5 +373,46 @@ describe('PostgreSQL Row-Level Security (RLS) Integration Tests', () => {
 
     const phones = await fork.find(TwilioPhoneNumber, {});
     expect(phones.length).toBe(0);
+
+    const sessions = await fork.find(CallSession, {});
+    expect(sessions.length).toBe(0);
+  });
+
+  it('call_sessions: Tenant A cannot see Tenant B call sessions', async () => {
+    // Tenant A context — query call_sessions — must only return Tenant A's session.
+    await tenantLocalStorage.run({ tenantId: tenantA.id }, async () => {
+      await runInTenantTransaction(orm.em, async (txEm) => {
+        const sessions = await txEm.find(CallSession, {});
+        expect(sessions.length).toBe(1);
+        expect(sessions[0].id).toBe(sessionA.id);
+
+        // Explicit lookup by Tenant B's session ID must return null
+        const starkSession = await txEm.findOne(CallSession, { id: sessionB.id });
+        expect(starkSession).toBeNull();
+
+        // Explicit lookup by Tenant B's callSid must return null
+        const starkByCid = await txEm.findOne(CallSession, { callSid: 'CA_RLS_TEST_STARK_001' });
+        expect(starkByCid).toBeNull();
+      });
+    });
+  });
+
+  it('call_sessions: Tenant B cannot see Tenant A call sessions', async () => {
+    // Tenant B context — query call_sessions — must only return Tenant B's session.
+    await tenantLocalStorage.run({ tenantId: tenantB.id }, async () => {
+      await runInTenantTransaction(orm.em, async (txEm) => {
+        const sessions = await txEm.find(CallSession, {});
+        expect(sessions.length).toBe(1);
+        expect(sessions[0].id).toBe(sessionB.id);
+
+        // Explicit lookup by Tenant A's session ID must return null
+        const acmeSession = await txEm.findOne(CallSession, { id: sessionA.id });
+        expect(acmeSession).toBeNull();
+
+        // Explicit lookup by Tenant A's callSid must return null
+        const acmeByCid = await txEm.findOne(CallSession, { callSid: 'CA_RLS_TEST_ACME_001' });
+        expect(acmeByCid).toBeNull();
+      });
+    });
   });
 });
