@@ -42,7 +42,8 @@ export function createAuthRouter(em: EntityManager): Router {
 
       // 3. Establish the thread-scoped tenant isolation context for RLS
       const context = { tenantId: tenant.id };
-      
+
+      let userId: string;
       await tenantLocalStorage.run(context, async () => {
         // 4. Run the persistence operations inside an atomic transaction enforcing RLS
         await runInTenantTransaction(em, async (txEm) => {
@@ -52,6 +53,7 @@ export function createAuthRouter(em: EntityManager): Router {
           // Create and persist the user
           const user = User.create(tenant, email.toLowerCase().trim(), passwordHash, 'admin');
           txEm.persist(user);
+          userId = user.id;
 
           // Create and persist the organization
           const org = Organization.create(tenant, tenantName.trim());
@@ -63,7 +65,7 @@ export function createAuthRouter(em: EntityManager): Router {
       const token = jwt.sign(
         {
           tenantId: tenant.id,
-          userId: tenant.id, // User id isn't returned directly but is scoped in JWT
+          userId: userId!,
           role: 'admin'
         },
         JWT_SECRET,
