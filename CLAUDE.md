@@ -13,7 +13,7 @@ Charlotte is an AI-powered virtual receptionist built on the Google Agent Develo
 
 ## Repository
 
-- GitHub: https://github.com/Synaptic-Weave/Charlotte (private)
+- GitHub: <https://github.com/Synaptic-Weave/Charlotte> (private)
 - Local: ~/Documents/Gemini/projects/Charlotte
 
 ## Competitors
@@ -27,10 +27,13 @@ Portfolio project. Concept stage.
 ## Session Memory
 
 You can search through conversational history using the native Total Recall semantic memory search:
+
 ```bash
 /recall <query>
 ```
+
 To view the status of the last 10 messages of the project:
+
 ```bash
 /status-report
 ```
@@ -42,7 +45,7 @@ Gemini CLI operates as **Coordinator**: a team coordinator that dispatches work 
 ### Team Roster (16 agents)
 
 | Agent | Role | Sub-agent Type |
-|-------|------|---------------|
+| ----- | ---- | ------------- |
 | **Neo** | Product Vision Interpreter | Core |
 | **Morpheus** | Scrum Master | Core |
 | **Trinity** | UX Architect | Core |
@@ -61,6 +64,7 @@ Gemini CLI operates as **Coordinator**: a team coordinator that dispatches work 
 | **Ghost** | Full-Stack Developer (Backup) | Flex |
 
 ### Methodology
+
 - **Vertical user stories** (Scrum): "As a <persona> I want to <action> so that <end result>"
 - **Lean Software Development**: Optimize lead time, minimize WIP, team swarms on stories
 - **GitHub Flow**: Feature branches (`{type}-{story#}-{title}`) via git worktrees -> PR -> main
@@ -72,4 +76,3 @@ Agent prompt files are in `.gemini/agents/{name}.md`.
 1. Read the agent's definition file in `.gemini/agents/{name}.md` before invoking.
 2. Delegate tasks to specialized agents using the native `invoke_agent` mechanism.
 3. Once the sub-agent completes their task, synthesize their findings and carry forward the workflow.
-
