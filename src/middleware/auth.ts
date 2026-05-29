@@ -11,14 +11,17 @@ declare global {
   }
 }
 
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) throw new Error('JWT_SECRET environment variable is required');
-
 /**
  * Express middleware to authenticate users via JWT and scope the current execution thread
  * with the correct tenant context.
  */
 export function authenticateToken(req: Request, res: Response, next: NextFunction): void {
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret) {
+    next(new Error('JWT_SECRET environment variable is required'));
+    return;
+  }
+
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer <token>
 
@@ -27,7 +30,7 @@ export function authenticateToken(req: Request, res: Response, next: NextFunctio
     return;
   }
 
-  jwt.verify(token, JWT_SECRET, (err, decoded) => {
+  jwt.verify(token, jwtSecret, (err, decoded) => {
     if (err) {
       res.status(403).json({ error: 'Invalid or expired authentication token.' });
       return;

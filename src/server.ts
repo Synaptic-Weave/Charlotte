@@ -52,7 +52,9 @@ async function bootstrap() {
   // Global Error Handler
   app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
     console.error('Unhandled API Error:', err);
-    res.status(err.status || 500).json({ error: err.message || 'Internal server error.' });
+    const status = typeof err.status === 'number' ? err.status : 500;
+    const message = status < 500 ? err.message : 'Internal server error occurred.';
+    res.status(status).json({ error: message });
   });
 
   // Start Server
