@@ -92,6 +92,56 @@ export function createCallsRouter(em: EntityManager): Router {
   });
 
   /**
+   * GET /api/tenants/calls/stats
+   * Guarded by authenticateToken
+   * Retrieve real-time, tenant-scoped call metrics from the database
+   */
+  router.get('/stats', authenticateToken, async (req, res) => {
+    try {
+      const tenantId = req.context?.tenantId;
+      if (!tenantId) {
+        res.status(401).json({ error: 'Tenant context is missing from token session.' });
+        return;
+      }
+
+      const stats = await runInTenantTransaction(em, async (txEm) => {
+        const callSessions = await txEm.find(CallSession, {});
+        
+        const totalCalls = callSessions.length;
+        
+        // Calculate average duration in seconds
+        const completedCalls = callSessions.filter(c => c.status === 'completed');
+        let totalDurationMs = 0;
+        completedCalls.forEach(c => {
+          totalDurationMs += c.updatedAt.getTime() - c.createdAt.getTime();
+        });
+        
+        const avgDurationSeconds = completedCalls.length > 0 
+          ? Math.round((totalDurationMs / completedCalls.length) / 1000) 
+          : 0;
+
+        // Calculate Answer Rate: percentage of connected (active/completed) calls vs total calls
+        const initiatedCount = callSessions.filter(c => c.status === 'initiated').length;
+        const answeredCount = totalCalls - initiatedCount;
+        const answerRate = totalCalls > 0 
+          ? Math.round((answeredCount / totalCalls) * 1000) / 10 
+          : 100.0;
+
+        return {
+          totalCalls,
+          avgDurationSeconds,
+          answerRate,
+        };
+      });
+
+      res.status(200).json(stats);
+    } catch (error: any) {
+      console.error('Error fetching call stats:', error);
+      res.status(500).json({ error: error.message || 'Internal server error occurred fetching stats.' });
+    }
+  });
+
+  /**
    * POST /api/tenants/calls/
    * Guarded by authenticateToken
    * Create a new manual/simulated call session for the tenant

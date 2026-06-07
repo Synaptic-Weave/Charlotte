@@ -59,6 +59,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
   const [hasMore, setHasMore] = useState(false);
   const [offset, setOffset] = useState(0);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+  const [stats, setStats] = useState({
+    totalCalls: 0,
+    avgDurationSeconds: 0,
+    answerRate: 100.0,
+  });
 
   // Selected Call Log for Transcript Drawer
   const [selectedCallId, setSelectedCallId] = useState<string>('');
@@ -146,9 +151,30 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
     }
   };
 
+  const fetchStats = async () => {
+    try {
+      const response = await fetch('/api/tenants/calls/stats', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setStats({
+          totalCalls: data.totalCalls ?? 0,
+          avgDurationSeconds: data.avgDurationSeconds ?? 0,
+          answerRate: data.answerRate ?? 100.0,
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching call stats:', error);
+    }
+  };
+
   // Initial load
   useEffect(() => {
     fetchCallLogs(true);
+    fetchStats();
   }, [token]);
 
   // Real-time WebSocket Updates
@@ -175,6 +201,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
               // Fetch from offset 0 up to current loaded count to refresh all displayed logs
               const currentCount = Math.max(15, callLogsLengthRef.current);
               fetchCallLogs(true, currentCount, 0);
+              fetchStats();
             }
           } catch (err) {
             console.error('[Dashboard WebSocket] Parse error:', err);
@@ -511,7 +538,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
               <div className="glass-card metric-card interactive" id="metric-answer-rate">
                 <div className="metric-info">
                   <span className="metric-label">Answer Rate</span>
-                  <span className="metric-value">98.4%</span>
+                  <span className="metric-value">{stats.answerRate.toFixed(1)}%</span>
                   <span className="metric-trend trend-up">↑ 1.2% this week</span>
                 </div>
                 <div className="metric-icon-wrapper">
@@ -522,7 +549,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
               <div className="glass-card metric-card interactive" id="metric-avg-duration">
                 <div className="metric-info">
                   <span className="metric-label">Avg Duration</span>
-                  <span className="metric-value">2m 14s</span>
+                  <span className="metric-value">
+                    {stats.avgDurationSeconds >= 60 
+                      ? `${Math.floor(stats.avgDurationSeconds / 60)}m ${stats.avgDurationSeconds % 60}s`
+                      : `${stats.avgDurationSeconds}s`}
+                  </span>
                   <span className="metric-trend text-secondary" style={{ fontSize: '0.8rem' }}>Target: &lt; 3m 00s</span>
                 </div>
                 <div className="metric-icon-wrapper">
@@ -533,7 +564,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
               <div className="glass-card metric-card interactive" id="metric-inbound-calls">
                 <div className="metric-info">
                   <span className="metric-label">Inbound Calls</span>
-                  <span className="metric-value">{callLogs.length + 120}</span>
+                  <span className="metric-value">{stats.totalCalls}</span>
                   <span className="metric-trend trend-up">↑ 12% vs last month</span>
                 </div>
                 <div className="metric-icon-wrapper">
