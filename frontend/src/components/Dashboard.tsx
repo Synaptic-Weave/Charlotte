@@ -56,10 +56,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
 
   // Call Logs & Live Streaming States
   const [callLogs, setCallLogs] = useState<CallLog[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [offset, setOffset] = useState(0);
+  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
 
   // Selected Call Log for Transcript Drawer
   const [selectedCallId, setSelectedCallId] = useState<string>('');
   const [activeLiveCall, setActiveLiveCall] = useState<CallLog | null>(null);
+
+  // Create a ref for the length of callLogs to avoid stale closures in WebSockets effect
+  const callLogsLengthRef = React.useRef(0);
+  useEffect(() => {
+    callLogsLengthRef.current = callLogs.length;
+  }, [callLogs]);
 
   // Load saved theme
   useEffect(() => {
@@ -93,9 +102,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
     fetchProvisionedNumbers();
   }, [token]);
 
-  const fetchCallLogs = async () => {
+  const fetchCallLogs = async (reset = false, customLimit?: number, customOffset?: number) => {
     try {
-      const response = await fetch('/api/tenants/calls', {
+      setIsLoadingLogs(true);
+      const fetchOffset = customOffset !== undefined ? customOffset : (reset ? 0 : offset);
+      const fetchLimit = customLimit !== undefined ? customLimit : 15;
+
+      const response = await fetch(`/api/tenants/calls?limit=${fetchLimit}&offset=${fetchOffset}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -103,10 +116,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
       if (response.ok) {
         const data = await response.json();
         if (data.calls) {
-          setCallLogs(data.calls);
+          setCallLogs(prev => {
+            const merged = reset ? data.calls : [...prev, ...data.calls];
+            // Remove duplicates by ID
+            const unique = merged.reduce((acc: CallLog[], curr: CallLog) => {
+              if (!acc.some(item => item.id === curr.id)) {
+                acc.push(curr);
+              }
+              return acc;
+            }, []);
+            return unique;
+          });
+
+          setHasMore(data.hasMore);
+          setOffset(fetchOffset + data.calls.length);
+
           if (data.calls.length > 0) {
             setSelectedCallId(prev => {
-              const stillExists = data.calls.some((c: any) => c.id === prev);
+              const stillExists = (reset ? data.calls : [...callLogs, ...data.calls]).some((c: any) => c.id === prev);
               return stillExists ? prev : data.calls[0].id;
             });
           }
@@ -114,15 +141,84 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
       }
     } catch (error) {
       console.error('Error fetching call logs:', error);
+    } finally {
+      setIsLoadingLogs(false);
     }
   };
 
-  // Load and poll call logs from database
+  // Initial load
   useEffect(() => {
-    fetchCallLogs();
-    const interval = setInterval(fetchCallLogs, 4000);
-    return () => clearInterval(interval);
+    fetchCallLogs(true);
   }, [token]);
+
+  // Real-time WebSocket Updates
+  useEffect(() => {
+    let ws: WebSocket | null = null;
+    let reconnectTimeout: any = null;
+
+    const connectWS = () => {
+      try {
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${wsProtocol}//${window.location.host}/api/ws/updates?token=${token}`;
+        console.log(`[Dashboard WebSocket] Connecting to ${wsUrl}`);
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+          console.log('[Dashboard WebSocket] Connected successfully.');
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            console.log('[Dashboard WebSocket] Message received:', data);
+            if (data.event === 'calls_updated') {
+              // Fetch from offset 0 up to current loaded count to refresh all displayed logs
+              const currentCount = Math.max(15, callLogsLengthRef.current);
+              fetchCallLogs(true, currentCount, 0);
+            }
+          } catch (err) {
+            console.error('[Dashboard WebSocket] Parse error:', err);
+          }
+        };
+
+        ws.onerror = (error) => {
+          console.error('[Dashboard WebSocket] Connection error:', error);
+        };
+
+        ws.onclose = (event) => {
+          console.log(`[Dashboard WebSocket] Closed: Code=${event.code}`);
+          reconnectTimeout = setTimeout(() => {
+            console.log('[Dashboard WebSocket] Reconnecting...');
+            connectWS();
+          }, 3000);
+        };
+      } catch (err) {
+        console.error('[Dashboard WebSocket] Setup error:', err);
+      }
+    };
+
+    connectWS();
+
+    return () => {
+      if (ws) {
+        ws.onclose = null;
+        ws.close();
+      }
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
+    };
+  }, [token]);
+
+  // Handle scroll-to-bottom for infinite scrolling
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    if (scrollHeight - scrollTop - clientHeight < 15) {
+      if (hasMore && !isLoadingLogs) {
+        fetchCallLogs(false);
+      }
+    }
+  };
 
   const applyTheme = (themeValue: string) => {
     setCurrentTheme(themeValue);
@@ -465,7 +561,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
                 </div>
 
                 <div className="glass-card" style={{ padding: '1rem' }}>
-                  <div className="table-container">
+                  <div 
+                    className="table-container"
+                    onScroll={handleScroll}
+                    style={{ maxHeight: '520px', overflowY: 'auto' }}
+                  >
                     <table className="custom-table" id="call-logs-table">
                       <thead>
                         <tr>
@@ -503,6 +603,27 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
                             </tr>
                           );
                         })}
+                        {isLoadingLogs && callLogs.length === 0 && (
+                          <tr>
+                            <td colSpan={4} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
+                              <span className="pulse-dot" style={{ display: 'inline-block', marginRight: '0.5rem' }}></span> Loading call sessions...
+                            </td>
+                          </tr>
+                        )}
+                        {!isLoadingLogs && callLogs.length === 0 && (
+                          <tr>
+                            <td colSpan={4} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
+                              No call sessions recorded.
+                            </td>
+                          </tr>
+                        )}
+                        {isLoadingLogs && callLogs.length > 0 && (
+                          <tr>
+                            <td colSpan={4} style={{ textAlign: 'center', padding: '0.75rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                              <span className="pulse-dot" style={{ display: 'inline-block', marginRight: '0.5rem' }}></span> Loading more records...
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
