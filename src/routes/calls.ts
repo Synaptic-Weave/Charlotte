@@ -4,6 +4,7 @@ import { Tenant } from '../domain/entities/Tenant.js';
 import { CallSession } from '../domain/entities/CallSession.js';
 import { runInTenantTransaction } from '../db/context.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { broadcastDashboardUpdate } from './streams.js';
 
 function formatTime(date: Date): string {
   const now = new Date();
@@ -52,9 +53,21 @@ export function createCallsRouter(em: EntityManager): Router {
         return;
       }
 
-      const results = await runInTenantTransaction(em, async (txEm) => {
-        const callSessions = await txEm.find(CallSession, {}, { orderBy: { createdAt: 'DESC' } });
-        return callSessions.map((session) => ({
+      const limit = typeof req.query.limit === 'string' ? parseInt(req.query.limit, 10) : 15;
+      const offset = typeof req.query.offset === 'string' ? parseInt(req.query.offset, 10) : 0;
+
+      const result = await runInTenantTransaction(em, async (txEm) => {
+        const [callSessions, count] = await txEm.findAndCount(
+          CallSession,
+          {},
+          {
+            orderBy: { createdAt: 'DESC' },
+            limit: isNaN(limit) ? 15 : limit,
+            offset: isNaN(offset) ? 0 : offset,
+          }
+        );
+
+        const mapped = callSessions.map((session) => ({
           id: session.id,
           caller: session.callerNumber,
           phone: session.callerNumber,
@@ -63,9 +76,15 @@ export function createCallsRouter(em: EntityManager): Router {
           status: session.status === 'active' || session.status === 'initiated' ? 'active' : 'completed',
           messages: session.messages || [],
         }));
+
+        return {
+          calls: mapped,
+          total: count,
+          hasMore: (isNaN(offset) ? 0 : offset) + callSessions.length < count,
+        };
       });
 
-      res.status(200).json({ calls: results });
+      res.status(200).json(result);
     } catch (error: any) {
       console.error('Error fetching call sessions:', error);
       res.status(500).json({ error: error.message || 'Internal server error occurred fetching calls.' });
@@ -98,6 +117,8 @@ export function createCallsRouter(em: EntityManager): Router {
         await txEm.flush();
         return callSession;
       });
+
+      broadcastDashboardUpdate(tenantId, { event: 'calls_updated' });
 
       res.status(201).json({
         message: 'Call session created successfully.',
@@ -158,6 +179,8 @@ export function createCallsRouter(em: EntityManager): Router {
         return callSession;
       });
 
+      broadcastDashboardUpdate(tenantId, { event: 'calls_updated' });
+
       res.status(200).json({
         message: 'Transcript message added successfully.',
         messages: result.messages,
@@ -201,6 +224,8 @@ export function createCallsRouter(em: EntityManager): Router {
         await txEm.flush();
         return callSession;
       });
+
+      broadcastDashboardUpdate(tenantId, { event: 'calls_updated' });
 
       res.status(200).json({
         message: 'Call session updated successfully.',
