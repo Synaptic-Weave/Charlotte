@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import http from 'http';
 import path from 'path';
-import { fileURLToPath } from 'url';
+
 import { WebSocketServer } from 'ws';
 import { MikroORM } from '@mikro-orm/postgresql';
 import config from './mikro-orm.config.js';
@@ -54,8 +54,6 @@ async function bootstrap() {
   app.use('/api/tenants/calls', createCallsRouter(orm.em));
 
   // Serve static files from the React frontend build folder if it exists
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = path.dirname(__filename);
   const frontendDistPath = path.resolve(__dirname, '../frontend/dist');
 
   app.use(express.static(frontendDistPath));

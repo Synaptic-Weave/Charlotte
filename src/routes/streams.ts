@@ -156,7 +156,7 @@ export function registerStreamHandler(wss: WebSocketServer, em: EntityManager): 
                   const greetingText = `Hello, thanks for calling ${activeTenant.name}, how can I assist you?`;
                   const greetingMsg = {
                     id: `msg-greet-${Date.now()}`,
-                    speaker: 'agent',
+                    speaker: 'charlotte' as const,
                     text: greetingText,
                     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
                   };
@@ -249,14 +249,14 @@ Never tell the caller to call another number or try another way; always use the 
                                     ? callSession.messages[callSession.messages.length - 1]
                                     : null;
 
-                                  if (lastMsg && lastMsg.speaker === 'user') {
+                                  if (lastMsg && lastMsg.speaker === 'caller') {
                                     lastMsg.text = `${lastMsg.text} ${userText}`.trim();
                                     callSession.messages = [...callSession.messages];
                                     callSession.updatedAt = new Date();
                                   } else {
                                     const newMsg = {
                                       id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-                                      speaker: 'user',
+                                      speaker: 'caller' as const,
                                       text: userText,
                                       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
                                     };
@@ -292,14 +292,14 @@ Never tell the caller to call another number or try another way; always use the 
                                       ? callSession.messages[callSession.messages.length - 1]
                                       : null;
 
-                                    if (lastMsg && lastMsg.speaker === 'agent') {
+                                    if (lastMsg && lastMsg.speaker === 'charlotte') {
                                       lastMsg.text = `${lastMsg.text} ${agentText}`.trim();
                                       callSession.messages = [...callSession.messages];
                                       callSession.updatedAt = new Date();
                                     } else {
                                       const newMsg = {
                                         id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-                                        speaker: 'agent',
+                                        speaker: 'charlotte' as const,
                                         text: agentText,
                                         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
                                       };
