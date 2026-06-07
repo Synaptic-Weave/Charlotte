@@ -156,10 +156,63 @@ Never tell the caller to call another number or try another way; always use the 
                         ],
                       },
                     ],
+                    inputAudioTranscription: {},
+                    outputAudioTranscription: {},
                   },
                   callbacks: {
                     onmessage: async (serverMsg: any) => {
                       try {
+                        // Handle real-time audio transcriptions
+                        const inputTx = serverMsg.serverContent?.inputTranscription;
+                        if (inputTx && inputTx.text && tenantId && callSid) {
+                          const userText = inputTx.text.trim();
+                          if (userText) {
+                            console.log(`[Twilio Stream] User Transcription: ${userText}`);
+                            await tenantLocalStorage.run({ tenantId }, async () => {
+                              await runInTenantTransaction(em, async (txEm) => {
+                                const callSession = await txEm.findOne(CallSession, { callSid });
+                                if (callSession) {
+                                  const newMsg = {
+                                    id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                                    speaker: 'user',
+                                    text: userText,
+                                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                                  };
+                                  callSession.addMessage(newMsg);
+                                  txEm.persist(callSession);
+                                  await txEm.flush();
+                                  console.log(`[Twilio Stream] User transcript appended to CallSession ${callSession.id}`);
+                                }
+                              });
+                            });
+                          }
+                        }
+
+                        const outputTx = serverMsg.serverContent?.outputTranscription;
+                        if (outputTx && outputTx.text && tenantId && callSid) {
+                          const agentText = outputTx.text.trim();
+                          if (agentText) {
+                            console.log(`[Twilio Stream] Agent Transcription: ${agentText}`);
+                            await tenantLocalStorage.run({ tenantId }, async () => {
+                              await runInTenantTransaction(em, async (txEm) => {
+                                const callSession = await txEm.findOne(CallSession, { callSid });
+                                if (callSession) {
+                                  const newMsg = {
+                                    id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                                    speaker: 'agent',
+                                    text: agentText,
+                                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                                  };
+                                  callSession.addMessage(newMsg);
+                                  txEm.persist(callSession);
+                                  await txEm.flush();
+                                  console.log(`[Twilio Stream] Agent transcript appended to CallSession ${callSession.id}`);
+                                }
+                              });
+                            });
+                          }
+                        }
+
                         // 1. Handle incoming model audio stream response
                         const parts = serverMsg.serverContent?.modelTurn?.parts;
                         if (parts) {
