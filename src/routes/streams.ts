@@ -192,13 +192,11 @@ export function registerStreamHandler(wss: WebSocketServer, em: EntityManager): 
                 geminiSession = await ai.live.connect({
                   model,
                   config: {
-                    generationConfig: {
-                      responseModalities: ['AUDIO'] as any,
-                      speechConfig: {
-                        voiceConfig: {
-                          prebuiltVoiceConfig: {
-                            voiceName: 'Aoede', // Puck, Charon, Kore, Fenrir, Aoede
-                          },
+                    responseModalities: ['AUDIO'] as any,
+                    speechConfig: {
+                      voiceConfig: {
+                        prebuiltVoiceConfig: {
+                          voiceName: 'Aoede', // Puck, Charon, Kore, Fenrir, Aoede
                         },
                       },
                     },
@@ -233,8 +231,6 @@ Never tell the caller to call another number or try another way; always use the 
                         ],
                       },
                     ],
-                    inputAudioTranscription: {},
-                    outputAudioTranscription: {},
                   },
                   callbacks: {
                     onmessage: async (serverMsg: any) => {
