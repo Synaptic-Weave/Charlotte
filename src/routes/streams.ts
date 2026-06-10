@@ -228,6 +228,20 @@ Never tell the caller to call another number or try another way; always use the 
                               required: ['department'],
                             },
                           },
+                          {
+                            name: 'query_crm',
+                            description: 'Query the CRM for customer context using their phone number.',
+                            parameters: {
+                              type: 'OBJECT' as any,
+                              properties: {
+                                phoneNumber: {
+                                  type: 'STRING' as any,
+                                  description: 'The phone number of the customer to look up. It should include the country code (e.g. +1).',
+                                },
+                              },
+                              required: ['phoneNumber'],
+                            },
+                          },
                         ],
                       },
                     ],
@@ -425,6 +439,37 @@ Never tell the caller to call another number or try another way; always use the 
                               } else {
                                 console.log(`[Twilio Mock] Warm transfer for Call ${callSid} to ${activeTenant?.destinationNumber || 'destination'} requested (mock mode).`);
                               }
+                            } else if (fn.name === 'query_crm') {
+                              const { phoneNumber } = fn.args;
+                              console.log(`[Tool Call] Model triggered query_crm for: ${phoneNumber}`);
+                              
+                              let crmResponse = 'No customer found with that phone number.';
+                              try {
+                                await tenantLocalStorage.run({ tenantId: tenantId! }, async () => {
+                                  const { CustomerService } = await import('../services/CustomerService.js');
+                                  const customerSvc = new CustomerService(em);
+                                  const customer = await customerSvc.findByPhoneNumber(phoneNumber);
+                                  if (customer) {
+                                    crmResponse = `Customer found: Name: ${customer.name}. Context: ${customer.context || 'None'}`;
+                                  }
+                                });
+                              } catch (err) {
+                                console.error('[Tool Call] Error executing query_crm:', err);
+                                crmResponse = 'Error occurred while querying the CRM.';
+                              }
+
+                              await geminiSession.sendToolResponse({
+                                functionResponses: [
+                                  {
+                                    name: 'query_crm',
+                                    id: fn.id,
+                                    response: {
+                                      status: 'success',
+                                      message: crmResponse,
+                                    },
+                                  },
+                                ],
+                              });
                             }
                           }
                         }

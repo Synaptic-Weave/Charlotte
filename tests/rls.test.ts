@@ -12,6 +12,9 @@ import { UserSchema } from '../src/domain/schemas/User.schema.js';
 import { OrganizationSchema } from '../src/domain/schemas/Organization.schema.js';
 import { TwilioPhoneNumberSchema } from '../src/domain/schemas/TwilioPhoneNumber.schema.js';
 import { CallSessionSchema } from '../src/domain/schemas/CallSession.schema.js';
+import { CustomerSchema } from '../src/domain/schemas/Customer.schema.js';
+import { Customer } from '../src/domain/entities/Customer.js';
+import { CustomerService } from '../src/services/CustomerService.js';
 import { tenantLocalStorage, runInTenantTransaction } from '../src/db/context.js';
 
 // Self-healing database connection discovery helper (superuser/owner context)
@@ -112,8 +115,8 @@ describe('PostgreSQL Row-Level Security (RLS) Integration Tests', () => {
     const superOrm = await MikroORM.init({
       ...config,
       clientUrl: dbSuperUrl,
-      entities: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema, CallSessionSchema],
-      entitiesTs: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema, CallSessionSchema],
+      entities: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema, CallSessionSchema, CustomerSchema],
+      entitiesTs: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema, CallSessionSchema, CustomerSchema],
     });
 
     try {
@@ -163,8 +166,8 @@ describe('PostgreSQL Row-Level Security (RLS) Integration Tests', () => {
     orm = await MikroORM.init({
       ...config,
       clientUrl: workingUrl,
-      entities: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema, CallSessionSchema],
-      entitiesTs: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema, CallSessionSchema],
+      entities: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema, CallSessionSchema, CustomerSchema],
+      entitiesTs: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema, CallSessionSchema, CustomerSchema],
     });
 
     // 5. Seed Isolated Tenant A Data
@@ -175,8 +178,9 @@ describe('PostgreSQL Row-Level Security (RLS) Integration Tests', () => {
         orgA = Organization.create(tenantA, 'Acme Engineering');
         const phoneA = TwilioPhoneNumber.create(tenantA, '+15125550100', 'Acme Hotline');
         sessionA = CallSession.create(tenantA, 'CA_RLS_TEST_ACME_001');
+        const customerA = Customer.create(tenantA, 'Alice', '+15550001111', 'Acme VIP');
 
-        txEm.persist([tenantA, userA, orgA, phoneA, sessionA]);
+        txEm.persist([tenantA, userA, orgA, phoneA, sessionA, customerA]);
         await txEm.flush();
       });
     });
@@ -189,8 +193,9 @@ describe('PostgreSQL Row-Level Security (RLS) Integration Tests', () => {
         orgB = Organization.create(tenantB, 'Stark R&D');
         const phoneB = TwilioPhoneNumber.create(tenantB, '+15125550101', 'Stark Hotline');
         sessionB = CallSession.create(tenantB, 'CA_RLS_TEST_STARK_001');
+        const customerB = Customer.create(tenantB, 'Bob', '+15550002222', 'Stark VIP');
 
-        txEm.persist([tenantB, userB, orgB, phoneB, sessionB]);
+        txEm.persist([tenantB, userB, orgB, phoneB, sessionB, customerB]);
         await txEm.flush();
       });
     });
@@ -413,6 +418,39 @@ describe('PostgreSQL Row-Level Security (RLS) Integration Tests', () => {
         const acmeByCid = await txEm.findOne(CallSession, { callSid: 'CA_RLS_TEST_ACME_001' });
         expect(acmeByCid).toBeNull();
       });
+    });
+  });
+
+  describe('CustomerService and Context Isolation', () => {
+    it('CustomerService should only fetch customers for the active tenant', async () => {
+      await tenantLocalStorage.run({ tenantId: tenantA.id }, async () => {
+        const customerSvc = new CustomerService(orm.em.fork());
+        // Can find Tenant A's customer
+        const alice = await customerSvc.findByPhoneNumber('+15550001111');
+        expect(alice).not.toBeNull();
+        expect(alice?.name).toBe('Alice');
+
+        // Cannot find Tenant B's customer
+        const bob = await customerSvc.findByPhoneNumber('+15550002222');
+        expect(bob).toBeNull();
+      });
+
+      await tenantLocalStorage.run({ tenantId: tenantB.id }, async () => {
+        const customerSvc = new CustomerService(orm.em.fork());
+        // Can find Tenant B's customer
+        const bob = await customerSvc.findByPhoneNumber('+15550002222');
+        expect(bob).not.toBeNull();
+        expect(bob?.name).toBe('Bob');
+
+        // Cannot find Tenant A's customer
+        const alice = await customerSvc.findByPhoneNumber('+15550001111');
+        expect(alice).toBeNull();
+      });
+    });
+    
+    it('CustomerService throws error if run outside of tenant context', async () => {
+      const customerSvc = new CustomerService(orm.em.fork());
+      await expect(customerSvc.findByPhoneNumber('+15550001111')).rejects.toThrow('CustomerService must be called within a tenant context');
     });
   });
 });

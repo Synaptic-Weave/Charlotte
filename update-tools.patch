@@ -1,0 +1,23 @@
+--- src/routes/streams.ts
++++ src/routes/streams.ts
+@@ -228,6 +228,21 @@
+                               required: ['department'],
+                             },
+                           },
++                          {
++                            name: 'query_crm',
++                            description: 'Query the CRM for customer context using their phone number.',
++                            parameters: {
++                              type: 'OBJECT' as any,
++                              properties: {
++                                phoneNumber: {
++                                  type: 'STRING' as any,
++                                  description: 'The phone number of the customer to look up. It should include the country code (e.g. +1).',
++                                },
++                              },
++                              required: ['phoneNumber'],
++                            },
++                          },
+                         ],
+                       },
+                     ],
