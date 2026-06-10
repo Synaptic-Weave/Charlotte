@@ -13,6 +13,7 @@ import { UserSchema } from '../src/domain/schemas/User.schema.js';
 import { OrganizationSchema } from '../src/domain/schemas/Organization.schema.js';
 import { TwilioPhoneNumberSchema } from '../src/domain/schemas/TwilioPhoneNumber.schema.js';
 import { CallSessionSchema } from '../src/domain/schemas/CallSession.schema.js';
+import { tenantLocalStorage, runInTenantTransaction } from '../src/db/context.js';
 let createWebhooksRouter: any;
 let registerStreamHandler: any;
 
@@ -154,13 +155,17 @@ describe('Charlotte Warm Transfer & Call Bridging Integration Tests', () => {
       await fork.nativeDelete(Tenant, { id: { $in: exTenants.map((t) => t.id) } });
     }
 
-    // 3. Seed active tenant with destination number
+    // 3. Seed active tenant with destination number inside RLS context so the
+    //    seed path exercises the same application data path as production writes.
     testTenant = Tenant.create('Warm Transfer Test Tenant Ltd', '+15551234567');
-    testTenant.destinationVerified = true;
-    testPhoneNumber = TwilioPhoneNumber.create(testTenant, '+15125550300', 'Transfer Test Line');
-
-    await fork.persist([testTenant, testPhoneNumber]);
-    await fork.flush();
+    testTenant.updateDestination('+15551234567', true);
+    await tenantLocalStorage.run({ tenantId: testTenant.id }, async () => {
+      await runInTenantTransaction(orm.em, async (txEm) => {
+        testPhoneNumber = TwilioPhoneNumber.create(testTenant, '+15125550300', 'Transfer Test Line');
+        txEm.persist([testTenant, testPhoneNumber]);
+        await txEm.flush();
+      });
+    });
 
     // 4. Express Server & WebSockets
     const app = express();
@@ -274,7 +279,7 @@ describe('Charlotte Warm Transfer & Call Bridging Integration Tests', () => {
     it('should return valid TwiML with <Gather> and speak department name', async () => {
       const response = await fetch(
         `${baseUrl}/api/webhook/twilio/transfer-whisper?inboundCallSid=CA_INBOUND_TRANSFER_123&department=Support&tenantId=${testTenant.id}`,
-        { method: 'POST' }
+        { method: 'POST', headers: { 'X-Twilio-Signature': 'mock' } }
       );
 
       expect(response.status).toBe(200);
@@ -295,7 +300,7 @@ describe('Charlotte Warm Transfer & Call Bridging Integration Tests', () => {
         `${baseUrl}/api/webhook/twilio/transfer-decision?inboundCallSid=CA_INBOUND_TRANSFER_123&department=Support&tenantId=${testTenant.id}`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'X-Twilio-Signature': 'mock', 'Content-Type': 'application/json' },
           body: JSON.stringify({ Digits: '1' }),
         }
       );
@@ -314,7 +319,7 @@ describe('Charlotte Warm Transfer & Call Bridging Integration Tests', () => {
         `${baseUrl}/api/webhook/twilio/transfer-decision?inboundCallSid=CA_INBOUND_TRANSFER_123&department=Support&tenantId=${testTenant.id}`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'X-Twilio-Signature': 'mock', 'Content-Type': 'application/json' },
           body: JSON.stringify({ Digits: '2' }),
         }
       );
@@ -338,7 +343,7 @@ describe('Charlotte Warm Transfer & Call Bridging Integration Tests', () => {
         `${baseUrl}/api/webhook/twilio/transfer-decision?inboundCallSid=CA_INBOUND_TRANSFER_123&department=Support&tenantId=${testTenant.id}&timeout=true`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'X-Twilio-Signature': 'mock', 'Content-Type': 'application/json' },
           body: JSON.stringify({}),
         }
       );
@@ -360,7 +365,7 @@ describe('Charlotte Warm Transfer & Call Bridging Integration Tests', () => {
         `${baseUrl}/api/webhook/twilio/voicemail-callback?inboundCallSid=CA_INBOUND_TRANSFER_123&tenantId=${testTenant.id}`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'X-Twilio-Signature': 'mock', 'Content-Type': 'application/json' },
           body: JSON.stringify({
             RecordingUrl: 'https://api.twilio.com/2010-04-01/Accounts/AC_test/Recordings/RE_12345',
             RecordingDuration: '15'

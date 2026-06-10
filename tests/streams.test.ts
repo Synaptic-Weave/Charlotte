@@ -13,6 +13,7 @@ import { UserSchema } from '../src/domain/schemas/User.schema.js';
 import { OrganizationSchema } from '../src/domain/schemas/Organization.schema.js';
 import { TwilioPhoneNumberSchema } from '../src/domain/schemas/TwilioPhoneNumber.schema.js';
 import { CallSessionSchema } from '../src/domain/schemas/CallSession.schema.js';
+import { tenantLocalStorage, runInTenantTransaction } from '../src/db/context.js';
 import {
   decodeMuLawBuffer,
   encodeMuLawBuffer,
@@ -83,6 +84,7 @@ describe('Charlotte Telephony Inbound Call Webhook & WebSocket Media Stream Brid
   beforeAll(async () => {
     // Run in mock/sandbox mode during testing by specifying a key starting with 'AIzaSyMock'
     process.env.GEMINI_API_KEY = 'AIzaSyMock_test_key';
+    delete process.env.TWILIO_AUTH_TOKEN;
 
     // Dynamically import routes after env setup to ensure streams.ts correctly initializes in mock mode
     const webhooksModule = await import('../src/routes/webhooks.js');
@@ -109,12 +111,16 @@ describe('Charlotte Telephony Inbound Call Webhook & WebSocket Media Stream Brid
       await fork.nativeDelete(Tenant, { id: { $in: exTenants.map((t) => t.id) } });
     }
 
-    // 3. Seed Tenant & Phone Number
+    // 3. Seed Tenant & Phone Number inside RLS context so the seed path
+    //    exercises the same application data path as production writes.
     testTenant = Tenant.create('Voice Test Tenant Ltd', '+15559990000');
-    testPhoneNumber = TwilioPhoneNumber.create(testTenant, '+15125550200', 'Voice Testing Number');
-
-    await fork.persist([testTenant, testPhoneNumber]);
-    await fork.flush();
+    await tenantLocalStorage.run({ tenantId: testTenant.id }, async () => {
+      await runInTenantTransaction(orm.em, async (txEm) => {
+        testPhoneNumber = TwilioPhoneNumber.create(testTenant, '+15125550200', 'Voice Testing Number');
+        txEm.persist([testTenant, testPhoneNumber]);
+        await txEm.flush();
+      });
+    });
     console.log(`[Test Setup] Seeded Tenant ${testTenant.id} with Twilio Number ${testPhoneNumber.phoneNumber}`);
 
     // 4. Initialize Express application and HTTP server
@@ -161,7 +167,7 @@ describe('Charlotte Telephony Inbound Call Webhook & WebSocket Media Stream Brid
     it('should reject call with 400 Bad Request if webhook parameters are missing', async () => {
       const response = await fetch(`${baseUrl}/api/webhook/twilio/inbound-call`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'X-Twilio-Signature': 'mock', 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       });
 
@@ -173,7 +179,7 @@ describe('Charlotte Telephony Inbound Call Webhook & WebSocket Media Stream Brid
     it('should return a friendly hangup TwiML XML block if phone number is not found/provisioned', async () => {
       const response = await fetch(`${baseUrl}/api/webhook/twilio/inbound-call`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'X-Twilio-Signature': 'mock', 'Content-Type': 'application/json' },
         body: JSON.stringify({
           To: '+18005559999', // Unknown unprovisioned number
           CallSid: 'CA_UNKNOWN_SID_001',
@@ -193,7 +199,7 @@ describe('Charlotte Telephony Inbound Call Webhook & WebSocket Media Stream Brid
       const callSid = 'CA_TEST_CALL_12345';
       const response = await fetch(`${baseUrl}/api/webhook/twilio/inbound-call`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'X-Twilio-Signature': 'mock', 'Content-Type': 'application/json' },
         body: JSON.stringify({
           To: '+15125550200', // Our seeded active number
           CallSid: callSid,
@@ -238,7 +244,7 @@ describe('Charlotte Telephony Inbound Call Webhook & WebSocket Media Stream Brid
     it('should handle POST /api/webhook/twilio/transfer-decision with accept decision (Digits=1) and return connecting conference TwiML', async () => {
       const response = await fetch(`${baseUrl}/api/webhook/twilio/transfer-decision?inboundCallSid=CA_TRANSFER_123&department=Sales`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        headers: { 'X-Twilio-Signature': 'mock', 'Content-Type': 'application/x-www-form-urlencoded' },
         body: 'Digits=1',
       });
 
@@ -253,7 +259,7 @@ describe('Charlotte Telephony Inbound Call Webhook & WebSocket Media Stream Brid
     it('should handle POST /api/webhook/twilio/transfer-decision with decline decision (Digits=2) or timeout and return voicemail redirect with mock support', async () => {
       const response = await fetch(`${baseUrl}/api/webhook/twilio/transfer-decision?inboundCallSid=CA_TRANSFER_123&department=Support`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        headers: { 'X-Twilio-Signature': 'mock', 'Content-Type': 'application/x-www-form-urlencoded' },
         body: 'Digits=2',
       });
 
@@ -268,7 +274,7 @@ describe('Charlotte Telephony Inbound Call Webhook & WebSocket Media Stream Brid
     it('should handle POST /api/webhook/twilio/voicemail-callback and return thank you response TwiML', async () => {
       const response = await fetch(`${baseUrl}/api/webhook/twilio/voicemail-callback?inboundCallSid=CA_TRANSFER_123`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        headers: { 'X-Twilio-Signature': 'mock', 'Content-Type': 'application/x-www-form-urlencoded' },
         body: 'RecordingUrl=http://mockurl.com/record.mp3&RecordingDuration=15',
       });
 
