@@ -8,11 +8,8 @@ import { Organization } from '../domain/entities/Organization.js';
 import { tenantLocalStorage, runInTenantTransaction } from '../db/context.js';
 import { authenticateToken } from '../middleware/auth.js';
 
-function requireEnv(key: string): string {
-  const val = process.env[key];
-  if (!val) throw new Error(`${key} environment variable is required`);
-  return val;
-}
+import { requireEnv } from '../utils/env.js';
+
 const JWT_SECRET = requireEnv('JWT_SECRET');
 
 export function createAuthRouter(em: EntityManager): Router {

@@ -11,11 +11,8 @@ declare global {
   }
 }
 
-function requireEnv(key: string): string {
-  const val = process.env[key];
-  if (!val) throw new Error(`${key} environment variable is required`);
-  return val;
-}
+import { requireEnv } from '../utils/env.js';
+
 const JWT_SECRET = requireEnv('JWT_SECRET');
 
 /**
