@@ -1,4 +1,4 @@
-import { WebSocket, WebSocketServer } from 'ws';
+import { WebSocket, WebSocketServer, RawData } from 'ws';
 import { IncomingMessage } from 'http';
 import { EntityManager } from '@mikro-orm/postgresql';
 import twilio from 'twilio';
@@ -19,7 +19,7 @@ const twilioClient = isTwilioConfigured ? twilio(accountSid, authToken) : null;
 // Setup Google GenAI Client
 const geminiApiKey = process.env.GEMINI_API_KEY;
 const hasGeminiKey = geminiApiKey && !geminiApiKey.startsWith('AIzaSyMock');
-const ai = hasGeminiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
+const ai = hasGeminiKey ? new GoogleGenAI({ apiKey: geminiApiKey, httpOptions: { apiVersion: 'v1alpha' } }) : null;
 
 const JWT_SECRET = process.env.JWT_SECRET || 'charlotte_super_secret_jwt_sign_key_change_me_in_production';
 
@@ -100,10 +100,12 @@ export function registerStreamHandler(wss: WebSocketServer, em: EntityManager): 
     let activeTenant: Tenant | null = null;
     let dialedNumber: string | null = null;
     let leftoverSamples: Int16Array = new Int16Array(0);
+    let outboundTransferCallSid: string | null = null;
 
-    ws.on('message', async (message: string) => {
+    ws.on('message', async (message: RawData) => {
       try {
-        const msg = JSON.parse(message);
+        const raw = typeof message === 'string' ? message : message.toString();
+        const msg = JSON.parse(raw);
 
         switch (msg.event) {
           case 'connected':
@@ -408,11 +410,14 @@ Never tell the caller to call another number or try another way; always use the 
                                   const apiBaseUrl = process.env.CHARLOTTE_API_BASE_URL || `${protocol}://${req.headers.host}`;
                                   const fromNumber = dialedNumber || (activeTenant as any).phoneNumber || process.env.TWILIO_FROM_NUMBER || '';
 
-                                  await twilioClient.calls.create({
+                                  const outboundCall = await twilioClient.calls.create({
                                     to: activeTenant.destinationNumber,
                                     from: fromNumber,
                                     url: `${apiBaseUrl}/api/webhook/twilio/transfer-whisper?inboundCallSid=${callSid}&department=${encodeURIComponent(department)}&tenantId=${tenantId}`
                                   });
+                                  
+                                  outboundTransferCallSid = outboundCall.sid;
+
 
                                   console.log(`[Twilio REST] Outbound transfer call initiated successfully.`);
                                 } catch (err) {
@@ -499,6 +504,16 @@ Never tell the caller to call another number or try another way; always use the 
 
     ws.on('close', async (code: number, reason: string) => {
       console.log(`[WebSocket] Twilio Stream closed. Code: ${code}, Reason: ${reason}`);
+
+      // Terminate outbound transfer call if it exists
+      if (outboundTransferCallSid && twilioClient) {
+        try {
+          console.log(`[Twilio REST] Inbound dropped, terminating active outbound transfer call ${outboundTransferCallSid}...`);
+          await twilioClient.calls(outboundTransferCallSid).update({ status: 'completed' });
+        } catch (err) {
+          console.error(`[Twilio REST] Failed to terminate outbound call:`, err);
+        }
+      }
 
       // Clean up Gemini Live connection
       if (geminiSession) {

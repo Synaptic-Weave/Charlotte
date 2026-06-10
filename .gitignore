@@ -13,6 +13,7 @@ out/
 .env.development.local
 .env.test.local
 .env.production.local
+.env.production
 *.pem
 *.key
 
@@ -54,3 +55,5 @@ npm-debug.log*
 terraform/.terraform/
 terraform/*.tfstate
 terraform/*.tfstate.*
+terraform/tfplan.out
+tfplan.out
