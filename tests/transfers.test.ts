@@ -13,6 +13,7 @@ import { UserSchema } from '../src/domain/schemas/User.schema.js';
 import { OrganizationSchema } from '../src/domain/schemas/Organization.schema.js';
 import { TwilioPhoneNumberSchema } from '../src/domain/schemas/TwilioPhoneNumber.schema.js';
 import { CallSessionSchema } from '../src/domain/schemas/CallSession.schema.js';
+import { tenantLocalStorage, runInTenantTransaction } from '../src/db/context.js';
 let createWebhooksRouter: any;
 let registerStreamHandler: any;
 
@@ -154,13 +155,17 @@ describe('Charlotte Warm Transfer & Call Bridging Integration Tests', () => {
       await fork.nativeDelete(Tenant, { id: { $in: exTenants.map((t) => t.id) } });
     }
 
-    // 3. Seed active tenant with destination number
+    // 3. Seed active tenant with destination number inside RLS context so the
+    //    seed path exercises the same application data path as production writes.
     testTenant = Tenant.create('Warm Transfer Test Tenant Ltd', '+15551234567');
     testTenant.updateDestination('+15551234567', true);
-    testPhoneNumber = TwilioPhoneNumber.create(testTenant, '+15125550300', 'Transfer Test Line');
-
-    await fork.persist([testTenant, testPhoneNumber]);
-    await fork.flush();
+    await tenantLocalStorage.run({ tenantId: testTenant.id }, async () => {
+      await runInTenantTransaction(orm.em, async (txEm) => {
+        testPhoneNumber = TwilioPhoneNumber.create(testTenant, '+15125550300', 'Transfer Test Line');
+        txEm.persist([testTenant, testPhoneNumber]);
+        await txEm.flush();
+      });
+    });
 
     // 4. Express Server & WebSockets
     const app = express();
