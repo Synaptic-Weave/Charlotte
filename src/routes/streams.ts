@@ -242,6 +242,28 @@ Never tell the caller to call another number or try another way; always use the 
                               required: ['phoneNumber'],
                             },
                           },
+                          {
+                            name: 'book_appointment',
+                            description: 'Book an appointment for a caller.',
+                            parameters: {
+                              type: 'OBJECT' as any,
+                              properties: {
+                                customerId: {
+                                  type: 'STRING' as any,
+                                  description: 'The UUID of the customer. You must query_crm first to get this.',
+                                },
+                                departmentName: {
+                                  type: 'STRING' as any,
+                                  description: 'The name of the department.',
+                                },
+                                dateString: {
+                                  type: 'STRING' as any,
+                                  description: 'The appointment date and time in ISO 8601 format.',
+                                },
+                              },
+                              required: ['customerId', 'departmentName', 'dateString'],
+                            },
+                          },
                         ],
                       },
                     ],
@@ -450,7 +472,7 @@ Never tell the caller to call another number or try another way; always use the 
                                   const customerSvc = new CustomerService(em);
                                   const customer = await customerSvc.findByPhoneNumber(phoneNumber);
                                   if (customer) {
-                                    crmResponse = `Customer found: Name: ${customer.name}. Context: ${customer.context || 'None'}`;
+                                    crmResponse = `Customer found: ID: ${customer.id}, Name: ${customer.name}. Context: ${customer.context || 'None'}`;
                                   }
                                 });
                               } catch (err) {
@@ -466,6 +488,35 @@ Never tell the caller to call another number or try another way; always use the 
                                     response: {
                                       status: 'success',
                                       message: crmResponse,
+                                    },
+                                  },
+                                ],
+                              });
+                            } else if (fn.name === 'book_appointment') {
+                              const { customerId, departmentName, dateString } = fn.args;
+                              console.log(`[Tool Call] Model triggered book_appointment for: ${customerId}, ${departmentName}, ${dateString}`);
+                              
+                              let bookResponse = '';
+                              try {
+                                await tenantLocalStorage.run({ tenantId: tenantId! }, async () => {
+                                  const { AppointmentService } = await import('../services/AppointmentService.js');
+                                  const appointmentSvc = new AppointmentService(em);
+                                  const appointment = await appointmentSvc.bookAppointment(customerId, departmentName, dateString);
+                                  bookResponse = `Appointment successfully booked for ${appointment.date} with ${departmentName}.`;
+                                });
+                              } catch (err: any) {
+                                console.error('[Tool Call] Error executing book_appointment:', err);
+                                bookResponse = `Failed to book appointment: ${err.message}. Please ask for a new time.`;
+                              }
+
+                              await geminiSession.sendToolResponse({
+                                functionResponses: [
+                                  {
+                                    name: 'book_appointment',
+                                    id: fn.id,
+                                    response: {
+                                      status: 'success',
+                                      message: bookResponse,
                                     },
                                   },
                                 ],
