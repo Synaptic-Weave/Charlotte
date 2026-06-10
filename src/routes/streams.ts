@@ -206,8 +206,8 @@ export function registerStreamHandler(wss: WebSocketServer, em: EntityManager): 
                           text: `You are Charlotte, the professional, friendly, and efficient AI-powered virtual receptionist for ${activeTenant.name}.
 When the conversation starts, you MUST pause for 1 second, then answer the phone by saying exactly: 'Hello, thanks for calling ${activeTenant.name}, how can I assist you?'
 Your job is to answer the caller's questions with brief, direct, and conversational responses suitable for a real-time telephone conversation.
-If the caller asks to be connected, transferred, or routed to a specific department (such as Sales, Support, Billing, or a human agent), you MUST immediately call the 'routeCall' tool with the destination.
-Never tell the caller to call another number or try another way; always use the 'routeCall' tool when routing is requested.`,
+If the caller asks to be connected, transferred, or routed to a specific department (such as Sales, Support, Billing, or a human agent), you MUST immediately call the 'transfer_call' tool with the destination.
+Never tell the caller to call another number or try another way; always use the 'transfer_call' tool when routing is requested.`,
                         },
                       ],
                     },
@@ -215,7 +215,7 @@ Never tell the caller to call another number or try another way; always use the 
                       {
                         functionDeclarations: [
                           {
-                            name: 'routeCall',
+                            name: 'transfer_call',
                             description: 'Route or transfer the call to a specific department or human agent.',
                             parameters: {
                               type: 'OBJECT' as any,
@@ -406,15 +406,15 @@ Never tell the caller to call another number or try another way; always use the 
                         const functionCalls = serverMsg.toolCall?.functionCalls;
                         if (functionCalls) {
                           for (const fn of functionCalls) {
-                            if (fn.name === 'routeCall') {
+                            if (fn.name === 'transfer_call') {
                               const { department } = fn.args as { department: string };
-                              console.log(`[Tool Call] Model triggered routeCall to: ${department}`);
+                              console.log(`[Tool Call] Model triggered transfer_call to: ${department}`);
 
                               // Acknowledge tool execution back to Gemini
                               await geminiSession.sendToolResponse({
                                 functionResponses: [
                                   {
-                                    name: 'routeCall',
+                                    name: 'transfer_call',
                                     id: fn.id,
                                     response: {
                                       status: 'success',
@@ -427,6 +427,24 @@ Never tell the caller to call another number or try another way; always use the 
                               // Execute the warm transfer via Twilio REST API
                               if (twilioClient && callSid && activeTenant) {
                                 try {
+                                  // Look up department routing number
+                                  let targetNumber = activeTenant.destinationNumber;
+                                  try {
+                                    await tenantLocalStorage.run({ tenantId: tenantId! }, async () => {
+                                      const { Department } = await import('../domain/entities/Department.js');
+                                      const dept = await em.fork().findOne(Department, {
+                                        tenant: activeTenant,
+                                        name: { $ilike: department } as any
+                                      });
+                                      if (dept && dept.routingNumber) {
+                                        targetNumber = dept.routingNumber;
+                                        console.log(`[Routing] Found department specific routing number: ${targetNumber}`);
+                                      }
+                                    });
+                                  } catch (err) {
+                                    console.error('[Routing] Error looking up department routing number:', err);
+                                  }
+
                                   console.log(`[Twilio REST] Putting inbound caller ${callSid} into conference Conf_${callSid}...`);
                                   const holdMusicUrl = process.env.HOLD_MUSIC_URL || 'https://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestain-MM-MAMBO.mp3';
                                   await twilioClient.calls(callSid).update({
@@ -439,22 +457,38 @@ Never tell the caller to call another number or try another way; always use the 
 </Response>`
                                   });
 
-                                  console.log(`[Twilio REST] Initiating outbound transfer call to ${activeTenant.destinationNumber}...`);
+                                  console.log(`[Twilio REST] Initiating outbound transfer call to ${targetNumber}...`);
                                   const isSecure = req.headers['x-forwarded-proto'] === 'https';
                                   const protocol = isSecure ? 'https' : 'http';
                                   const apiBaseUrl = process.env.CHARLOTTE_API_BASE_URL || `${protocol}://${req.headers.host}`;
                                   const fromNumber = dialedNumber || (activeTenant as any).phoneNumber || process.env.TWILIO_FROM_NUMBER || '';
 
-                                  const outboundCall = await twilioClient.calls.create({
-                                    to: activeTenant.destinationNumber,
-                                    from: fromNumber,
-                                    url: `${apiBaseUrl}/api/webhook/twilio/transfer-whisper?inboundCallSid=${callSid}&department=${encodeURIComponent(department)}&tenantId=${tenantId}`
-                                  });
-                                  
-                                  outboundTransferCallSid = outboundCall.sid;
+                                  // Support SIP URI routing if targetNumber starts with sip:
+                                  let outboundTwiml = '';
+                                  if (targetNumber.startsWith('sip:')) {
+                                    outboundTwiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Dial>
+    <Sip>${targetNumber}</Sip>
+  </Dial>
+</Response>`;
+                                    const outboundCall = await twilioClient.calls.create({
+                                      twiml: outboundTwiml,
+                                      to: targetNumber,
+                                      from: fromNumber
+                                    });
+                                    outboundTransferCallSid = outboundCall.sid;
+                                    console.log(`[Twilio REST] Outbound SIP transfer call initiated successfully.`);
+                                  } else {
+                                    const outboundCall = await twilioClient.calls.create({
+                                      to: targetNumber,
+                                      from: fromNumber,
+                                      url: `${apiBaseUrl}/api/webhook/twilio/transfer-whisper?inboundCallSid=${callSid}&department=${encodeURIComponent(department)}&tenantId=${tenantId}`
+                                    });
+                                    outboundTransferCallSid = outboundCall.sid;
+                                    console.log(`[Twilio REST] Outbound transfer call initiated successfully.`);
+                                  }
 
-
-                                  console.log(`[Twilio REST] Outbound transfer call initiated successfully.`);
                                 } catch (err) {
                                   console.error('[Twilio REST] Failed to perform warm transfer:', err);
                                 }
