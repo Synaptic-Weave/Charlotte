@@ -15,5 +15,11 @@ export default defineConfig({
       ],
       reporter: ['text', 'json', 'html'],
     },
+    pool: 'forks',
+    poolOptions: {
+      forks: {
+        singleFork: true,
+      },
+    },
   },
 });
