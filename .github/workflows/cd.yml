@@ -1,15 +1,20 @@
+---
 name: Continuous Deployment
 
-on:
+"on":
   push:
     branches:
       - main
 
+# yamllint disable rule:line-length
 env:
   PROJECT_ID: charlotte-sw
   REGION: us-central1
-  BACKEND_IMAGE: us-central1-docker.pkg.dev/charlotte-sw/charlotte-repo/charlotte-backend
-  FRONTEND_IMAGE: us-central1-docker.pkg.dev/charlotte-sw/charlotte-repo/charlotte-frontend
+  BACKEND_IMAGE: >-
+    us-central1-docker.pkg.dev/charlotte-sw/charlotte-repo/charlotte-backend
+  FRONTEND_IMAGE: >-
+    us-central1-docker.pkg.dev/charlotte-sw/charlotte-repo/charlotte-frontend
+# yamllint enable rule:line-length
 
 jobs:
   deploy:
@@ -17,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write # Required for Workload Identity Federation
+      id-token: write  # Required for Workload Identity Federation
 
     steps:
       - name: Checkout Code
@@ -29,8 +34,12 @@ jobs:
         with:
           project_id: ${{ env.PROJECT_ID }}
           # Requires GCP_PROJECT_NUMBER to be set in GitHub repository secrets
-          workload_identity_provider: projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider
-          service_account: github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
+          # yamllint disable rule:line-length
+          workload_identity_provider: >-
+            projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider
+          service_account: >-
+            github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
+          # yamllint enable rule:line-length
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
@@ -40,14 +49,18 @@ jobs:
 
       - name: Build and Push Backend Image
         run: |
-          docker build -t ${{ env.BACKEND_IMAGE }}:${{ github.sha }} -t ${{ env.BACKEND_IMAGE }}:latest .
+          docker build \
+            -t ${{ env.BACKEND_IMAGE }}:${{ github.sha }} \
+            -t ${{ env.BACKEND_IMAGE }}:latest .
           docker push ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
           docker push ${{ env.BACKEND_IMAGE }}:latest
 
       - name: Build and Push Frontend Image
         working-directory: ./frontend
         run: |
-          docker build -t ${{ env.FRONTEND_IMAGE }}:${{ github.sha }} -t ${{ env.FRONTEND_IMAGE }}:latest .
+          docker build \
+            -t ${{ env.FRONTEND_IMAGE }}:${{ github.sha }} \
+            -t ${{ env.FRONTEND_IMAGE }}:latest .
           docker push ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
           docker push ${{ env.FRONTEND_IMAGE }}:latest
 
@@ -57,7 +70,7 @@ jobs:
           gcloud run jobs update charlotte-db-migrate \
             --region ${{ env.REGION }} \
             --image ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
-          
+
           gcloud run jobs execute charlotte-db-migrate \
             --region ${{ env.REGION }} \
             --wait
