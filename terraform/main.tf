@@ -111,10 +111,16 @@ resource "google_sql_database" "database" {
   project  = var.project_id
 }
 
+resource "random_password" "db_password" {
+  length           = 16
+  special          = true
+  override_special = "!#$%&*()-_=+[]{}<>:?"
+}
+
 resource "google_sql_user" "db_user" {
   name     = var.db_user
   instance = google_sql_database_instance.db_instance.name
-  password = var.db_password
+  password = random_password.db_password.result
   project  = var.project_id
 }
 
@@ -205,6 +211,20 @@ resource "google_secret_manager_secret_version" "jwt_secret_version" {
   secret_data = var.jwt_secret
 }
 
+resource "google_secret_manager_secret" "db_password" {
+  secret_id = "db_password"
+  project   = var.project_id
+  replication {
+    auto {}
+  }
+  depends_on = [google_project_service.gcp_services]
+}
+
+resource "google_secret_manager_secret_version" "db_password_version" {
+  secret      = google_secret_manager_secret.db_password.id
+  secret_data = random_password.db_password.result
+}
+
 resource "google_secret_manager_secret" "db_url" {
   secret_id = "database_url"
   project   = var.project_id
@@ -216,7 +236,7 @@ resource "google_secret_manager_secret" "db_url" {
 
 resource "google_secret_manager_secret_version" "db_url_version" {
   secret      = google_secret_manager_secret.db_url.id
-  secret_data = "postgresql://${var.db_user}:${var.db_password}@${google_sql_database_instance.db_instance.private_ip_address}:5432/${var.db_name}?sslmode=disable"
+  secret_data = "postgresql://${var.db_user}:${urlencode(random_password.db_password.result)}@${google_sql_database_instance.db_instance.private_ip_address}:5432/${var.db_name}?sslmode=disable"
 }
 
 # -------------------------------------------------------------------------
@@ -237,13 +257,14 @@ resource "google_service_account" "frontend_sa" {
 # Grant backend service account read access to all secrets
 locals {
   managed_secrets = [
-    google_secret_manager_secret.twilio_account_sid.id,
-    google_secret_manager_secret.twilio_auth_token.id,
-    google_secret_manager_secret.twilio_api_key.id,
-    google_secret_manager_secret.twilio_api_secret.id,
-    google_secret_manager_secret.gemini_api_key.id,
-    google_secret_manager_secret.jwt_secret.id,
-    google_secret_manager_secret.db_url.id
+    google_secret_manager_secret.twilio_account_sid.secret_id,
+    google_secret_manager_secret.twilio_auth_token.secret_id,
+    google_secret_manager_secret.twilio_api_key.secret_id,
+    google_secret_manager_secret.twilio_api_secret.secret_id,
+    google_secret_manager_secret.gemini_api_key.secret_id,
+    google_secret_manager_secret.jwt_secret.secret_id,
+    google_secret_manager_secret.db_password.secret_id,
+    google_secret_manager_secret.db_url.secret_id
   ]
 }
 
@@ -269,7 +290,7 @@ resource "google_cloud_run_v2_service" "backend" {
 
     vpc_access {
       connector = google_vpc_access_connector.connector.id
-      egress    = "ALL_TRAFFIC"
+      egress    = "PRIVATE_RANGES_ONLY"
     }
 
     containers {
@@ -284,10 +305,6 @@ resource "google_cloud_run_v2_service" "backend" {
         value = "production"
       }
 
-      env {
-        name  = "PORT"
-        value = "8080"
-      }
 
       env {
         name = "DATABASE_URL"

@@ -11,6 +11,8 @@ export const CallSessionSchema = new EntitySchema<CallSession>({
     callSid: { type: 'string', unique: true },
     streamSid: { type: 'string', nullable: true },
     status: { type: 'string' },
+    callerNumber: { type: 'string', default: 'Unknown' },
+    messages: { type: 'json', nullable: true },
     createdAt: { type: 'Date' },
     updatedAt: { type: 'Date', onUpdate: () => new Date() },
   },
