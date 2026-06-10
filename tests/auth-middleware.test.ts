@@ -21,9 +21,8 @@ let baseUrl: string;
 // Set up a real Express app with the auth middleware protecting a test route.
 // We do not mock jwt or the middleware — this is a real integration test.
 beforeAll(async () => {
-  // Ensure JWT_SECRET env is not set so the middleware uses the documented fallback,
-  // making the test self-contained without external config.
-  delete process.env.JWT_SECRET;
+  // Ensure JWT_SECRET env is set so the middleware passes requireEnv
+  process.env.JWT_SECRET = VALID_SECRET;
 
   // Dynamic import AFTER deleting the env var so the module captures the correct secret.
   const { authenticateToken } = await import('../src/middleware/auth.js');

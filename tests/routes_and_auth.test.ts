@@ -214,7 +214,7 @@ describe('Charlotte API Routes and Authentication Middleware Integration Tests',
         headers: { 'Authorization': 'NotBearer token123' },
       });
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(401);
       const data = await response.json();
       expect(data).toEqual({ error: 'Invalid or expired authentication token.' });
     });
@@ -226,7 +226,7 @@ describe('Charlotte API Routes and Authentication Middleware Integration Tests',
         headers: { 'Authorization': `Bearer ${invalidToken}` },
       });
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(401);
       const data = await response.json();
       expect(data).toEqual({ error: 'Invalid or expired authentication token.' });
     });
@@ -242,7 +242,7 @@ describe('Charlotte API Routes and Authentication Middleware Integration Tests',
         headers: { 'Authorization': `Bearer ${expiredToken}` },
       });
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(401);
       const data = await response.json();
       expect(data).toEqual({ error: 'Invalid or expired authentication token.' });
     });
@@ -257,7 +257,7 @@ describe('Charlotte API Routes and Authentication Middleware Integration Tests',
         headers: { 'Authorization': `Bearer ${invalidClaimsToken}` },
       });
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(401);
       const data = await response.json();
       expect(data).toEqual({ error: 'Token is missing tenant or user claim attributes.' });
     });
