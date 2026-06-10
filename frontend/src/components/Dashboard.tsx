@@ -55,42 +55,25 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
   ]);
 
   // Call Logs & Live Streaming States
-  const [callLogs, setCallLogs] = useState<CallLog[]>([
-    {
-      id: 'log-1',
-      caller: 'Michael Brown',
-      phone: '+1 (512) 555-0199',
-      time: 'Today, 11:34 AM',
-      duration: '2m 15s',
-      status: 'completed',
-      messages: [
-        { id: 'm1-1', speaker: 'charlotte', text: "Hi there! Thank you for calling Brown Consulting. I'm Charlotte, your virtual receptionist. How can I help you support your business today?", timestamp: "11:34:02 AM" },
-        { id: 'm1-2', speaker: 'caller', text: "Hi Charlotte, I wanted to check your operating hours and if you have any consultation slots open this afternoon.", timestamp: "11:34:15 AM" },
-        { id: 'm1-3', speaker: 'charlotte', text: "We are open from Monday to Friday, 9:00 AM to 5:00 PM CST. I can see a couple of slots available for a cloud architecture consultation at 2:00 PM and 3:30 PM today. Would you like me to book one of those for you?", timestamp: "11:34:38 AM" },
-        { id: 'm1-4', speaker: 'caller', text: "Yes, please book the 2:00 PM slot under Michael!", timestamp: "11:34:55 AM" },
-        { id: 'm1-5', speaker: 'charlotte', text: "Perfect, Michael! I have provisionally reserved the 2:00 PM slot for you. A confirmation link has been sent to your mobile. I'm always here if you need anything else!", timestamp: "11:35:10 AM" }
-      ]
-    },
-    {
-      id: 'log-2',
-      caller: 'Robert Vance',
-      phone: '+1 (212) 555-0811',
-      time: 'Yesterday, 4:45 PM',
-      duration: '3m 40s',
-      status: 'completed',
-      messages: [
-        { id: 'm2-1', speaker: 'charlotte', text: "Thank you for calling Vance Refrigeration! I'm Charlotte, your AI helper. How can I direct your call?", timestamp: "4:45:10 PM" },
-        { id: 'm2-2', speaker: 'caller', text: "Yes, I need to speak to Bob Vance regarding an commercial refrigeration order.", timestamp: "4:45:25 PM" },
-        { id: 'm2-3', speaker: 'charlotte', text: "I'd be happy to check if Bob Vance is available for a transfer, or I can take a callback message for him. What is your invoice number?", timestamp: "4:45:48 PM" },
-        { id: 'm2-4', speaker: 'caller', text: "Invoice #98224. Please tell him it is urgent.", timestamp: "4:46:05 PM" },
-        { id: 'm2-5', speaker: 'charlotte', text: "Understood. Bob is currently out of office, so I have filed a high-priority callback ticket for Invoice #98224. I will also forward this message directly to his dashboard. Have a wonderful day!", timestamp: "4:46:30 PM" }
-      ]
-    }
-  ]);
+  const [callLogs, setCallLogs] = useState<CallLog[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [offset, setOffset] = useState(0);
+  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+  const [stats, setStats] = useState({
+    totalCalls: 0,
+    avgDurationSeconds: 0,
+    answerRate: 100.0,
+  });
 
   // Selected Call Log for Transcript Drawer
-  const [selectedCallId, setSelectedCallId] = useState<string>('log-1');
+  const [selectedCallId, setSelectedCallId] = useState<string>('');
   const [activeLiveCall, setActiveLiveCall] = useState<CallLog | null>(null);
+
+  // Create a ref for the length of callLogs to avoid stale closures in WebSockets effect
+  const callLogsLengthRef = React.useRef(0);
+  useEffect(() => {
+    callLogsLengthRef.current = callLogs.length;
+  }, [callLogs]);
 
   // Load saved theme
   useEffect(() => {
@@ -124,6 +107,146 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
     fetchProvisionedNumbers();
   }, [token]);
 
+  const fetchCallLogs = async (reset = false, customLimit?: number, customOffset?: number) => {
+    try {
+      setIsLoadingLogs(true);
+      const fetchOffset = customOffset !== undefined ? customOffset : (reset ? 0 : offset);
+      const fetchLimit = customLimit !== undefined ? customLimit : 15;
+
+      const response = await fetch(`/api/tenants/calls?limit=${fetchLimit}&offset=${fetchOffset}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.calls) {
+          setCallLogs(prev => {
+            const merged = reset ? data.calls : [...prev, ...data.calls];
+            // Remove duplicates by ID
+            const unique = merged.reduce((acc: CallLog[], curr: CallLog) => {
+              if (!acc.some(item => item.id === curr.id)) {
+                acc.push(curr);
+              }
+              return acc;
+            }, []);
+            return unique;
+          });
+
+          setHasMore(data.hasMore);
+          setOffset(fetchOffset + data.calls.length);
+
+          if (data.calls.length > 0) {
+            setSelectedCallId(prev => {
+              const stillExists = (reset ? data.calls : [...callLogs, ...data.calls]).some((c: any) => c.id === prev);
+              return stillExists ? prev : data.calls[0].id;
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching call logs:', error);
+    } finally {
+      setIsLoadingLogs(false);
+    }
+  };
+
+  const fetchStats = async () => {
+    try {
+      const response = await fetch('/api/tenants/calls/stats', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setStats({
+          totalCalls: data.totalCalls ?? 0,
+          avgDurationSeconds: data.avgDurationSeconds ?? 0,
+          answerRate: data.answerRate ?? 100.0,
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching call stats:', error);
+    }
+  };
+
+  // Initial load
+  useEffect(() => {
+    fetchCallLogs(true);
+    fetchStats();
+  }, [token]);
+
+  // Real-time WebSocket Updates
+  useEffect(() => {
+    let ws: WebSocket | null = null;
+    let reconnectTimeout: any = null;
+
+    const connectWS = () => {
+      try {
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${wsProtocol}//${window.location.host}/api/ws/updates?token=${token}`;
+        console.log(`[Dashboard WebSocket] Connecting to ${wsUrl}`);
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+          console.log('[Dashboard WebSocket] Connected successfully.');
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            console.log('[Dashboard WebSocket] Message received:', data);
+            if (data.event === 'calls_updated') {
+              // Fetch from offset 0 up to current loaded count to refresh all displayed logs
+              const currentCount = Math.max(15, callLogsLengthRef.current);
+              fetchCallLogs(true, currentCount, 0);
+              fetchStats();
+            }
+          } catch (err) {
+            console.error('[Dashboard WebSocket] Parse error:', err);
+          }
+        };
+
+        ws.onerror = (error) => {
+          console.error('[Dashboard WebSocket] Connection error:', error);
+        };
+
+        ws.onclose = (event) => {
+          console.log(`[Dashboard WebSocket] Closed: Code=${event.code}`);
+          reconnectTimeout = setTimeout(() => {
+            console.log('[Dashboard WebSocket] Reconnecting...');
+            connectWS();
+          }, 3000);
+        };
+      } catch (err) {
+        console.error('[Dashboard WebSocket] Setup error:', err);
+      }
+    };
+
+    connectWS();
+
+    return () => {
+      if (ws) {
+        ws.onclose = null;
+        ws.close();
+      }
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
+    };
+  }, [token]);
+
+  // Handle scroll-to-bottom for infinite scrolling
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    if (scrollHeight - scrollTop - clientHeight < 15) {
+      if (hasMore && !isLoadingLogs) {
+        fetchCallLogs(false);
+      }
+    }
+  };
+
   const applyTheme = (themeValue: string) => {
     setCurrentTheme(themeValue);
     if (themeValue) {
@@ -145,73 +268,113 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
     { speaker: 'charlotte' as const, text: "Perfect! Initiating live transfer to your configured fallback line... Please hold a moment while I connect you." }
   ];
 
-  // Simulated live voice-to-text call logic
-  const handleSimulateCall = () => {
+  // Simulated live voice-to-text call logic using real backend APIs
+  const handleSimulateCall = async () => {
     setActiveTab('live');
     
-    // Create new temporary live call log
-    const newCallId = `live-${Date.now()}`;
-    const liveCallTemplate: CallLog = {
-      id: newCallId,
-      caller: 'Michael (Simulated)',
-      phone: provisionedLines[0]?.phoneNumber || '+1 (512) 555-0199',
-      time: 'Just now',
-      duration: 'Streaming',
-      status: 'active',
-      messages: []
-    };
+    try {
+      // 1. Create a CallSession in the PostgreSQL database
+      const createRes = await fetch('/api/tenants/calls', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          callerNumber: '+1 (512) 555-0199'
+        })
+      });
 
-    // Add to logs and set as selected
-    setCallLogs(prev => [liveCallTemplate, ...prev]);
-    setSelectedCallId(newCallId);
-    setActiveLiveCall(liveCallTemplate);
-
-    let scriptIdx = 0;
-    
-    const interval = setInterval(() => {
-      if (scriptIdx < simulationScript.length) {
-        const scriptMsg = simulationScript[scriptIdx];
-        const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        
-        const newMsg: TranscriptMessage = {
-          id: `msg-${Date.now()}-${scriptIdx}`,
-          speaker: scriptMsg.speaker,
-          text: scriptMsg.text,
-          timestamp: timeStr
-        };
-
-        setCallLogs(prevLogs => {
-          return prevLogs.map(log => {
-            if (log.id === newCallId) {
-              return {
-                ...log,
-                messages: [...log.messages, newMsg]
-              };
-            }
-            return log;
-          });
-        });
-
-        scriptIdx++;
-      } else {
-        // Complete the call log
-        clearInterval(interval);
-        setCallLogs(prevLogs => {
-          return prevLogs.map(log => {
-            if (log.id === newCallId) {
-              return {
-                ...log,
-                status: 'completed',
-                duration: '1m 45s',
-                time: 'Just now'
-              };
-            }
-            return log;
-          });
-        });
-        setActiveLiveCall(null);
+      if (!createRes.ok) {
+        throw new Error('Failed to create simulated call session on backend.');
       }
-    }, 2800);
+
+      const createData = await createRes.json();
+      const realCall = createData.call;
+      const callId = realCall.id;
+
+      // Update local state immediately so UI feels fast and responsive
+      setCallLogs(prev => [realCall, ...prev]);
+      setSelectedCallId(callId);
+      setActiveLiveCall(realCall);
+
+      let scriptIdx = 0;
+
+      const interval = setInterval(async () => {
+        if (scriptIdx < simulationScript.length) {
+          const scriptMsg = simulationScript[scriptIdx];
+          
+          try {
+            const msgRes = await fetch(`/api/tenants/calls/${callId}/messages`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                speaker: scriptMsg.speaker,
+                text: scriptMsg.text
+              })
+            });
+
+            if (msgRes.ok) {
+              const msgData = await msgRes.json();
+              // Trigger a local UI update from the backend's updated message list
+              setCallLogs(prevLogs => {
+                return prevLogs.map(log => {
+                  if (log.id === callId) {
+                    return {
+                      ...log,
+                      messages: msgData.messages
+                    };
+                  }
+                  return log;
+                });
+              });
+            }
+          } catch (error) {
+            console.error('Error sending simulated transcript message:', error);
+          }
+
+          scriptIdx++;
+        } else {
+          clearInterval(interval);
+          
+          try {
+            // 3. Mark CallSession as completed
+            const updateRes = await fetch(`/api/tenants/calls/${callId}`, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                status: 'completed'
+              })
+            });
+
+            if (updateRes.ok) {
+              const updateData = await updateRes.json();
+              setCallLogs(prevLogs => {
+                return prevLogs.map(log => {
+                  if (log.id === callId) {
+                    return updateData.call;
+                  }
+                  return log;
+                });
+              });
+            }
+          } catch (error) {
+            console.error('Error completing simulated call session:', error);
+          } finally {
+            setActiveLiveCall(null);
+          }
+        }
+      }, 2800);
+
+    } catch (error) {
+      console.error('Error starting live simulation:', error);
+    }
   };
 
   const handleSaveSettings = async (e: React.FormEvent) => {
@@ -375,7 +538,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
               <div className="glass-card metric-card interactive" id="metric-answer-rate">
                 <div className="metric-info">
                   <span className="metric-label">Answer Rate</span>
-                  <span className="metric-value">98.4%</span>
+                  <span className="metric-value">{stats.answerRate.toFixed(1)}%</span>
                   <span className="metric-trend trend-up">↑ 1.2% this week</span>
                 </div>
                 <div className="metric-icon-wrapper">
@@ -386,7 +549,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
               <div className="glass-card metric-card interactive" id="metric-avg-duration">
                 <div className="metric-info">
                   <span className="metric-label">Avg Duration</span>
-                  <span className="metric-value">2m 14s</span>
+                  <span className="metric-value">
+                    {stats.avgDurationSeconds >= 60 
+                      ? `${Math.floor(stats.avgDurationSeconds / 60)}m ${stats.avgDurationSeconds % 60}s`
+                      : `${stats.avgDurationSeconds}s`}
+                  </span>
                   <span className="metric-trend text-secondary" style={{ fontSize: '0.8rem' }}>Target: &lt; 3m 00s</span>
                 </div>
                 <div className="metric-icon-wrapper">
@@ -397,7 +564,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
               <div className="glass-card metric-card interactive" id="metric-inbound-calls">
                 <div className="metric-info">
                   <span className="metric-label">Inbound Calls</span>
-                  <span className="metric-value">{callLogs.length + 120}</span>
+                  <span className="metric-value">{stats.totalCalls}</span>
                   <span className="metric-trend trend-up">↑ 12% vs last month</span>
                 </div>
                 <div className="metric-icon-wrapper">
@@ -425,7 +592,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
                 </div>
 
                 <div className="glass-card" style={{ padding: '1rem' }}>
-                  <div className="table-container">
+                  <div 
+                    className="table-container"
+                    onScroll={handleScroll}
+                    style={{ maxHeight: '520px', overflowY: 'auto' }}
+                  >
                     <table className="custom-table" id="call-logs-table">
                       <thead>
                         <tr>
@@ -463,6 +634,27 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
                             </tr>
                           );
                         })}
+                        {isLoadingLogs && callLogs.length === 0 && (
+                          <tr>
+                            <td colSpan={4} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
+                              <span className="pulse-dot" style={{ display: 'inline-block', marginRight: '0.5rem' }}></span> Loading call sessions...
+                            </td>
+                          </tr>
+                        )}
+                        {!isLoadingLogs && callLogs.length === 0 && (
+                          <tr>
+                            <td colSpan={4} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
+                              No call sessions recorded.
+                            </td>
+                          </tr>
+                        )}
+                        {isLoadingLogs && callLogs.length > 0 && (
+                          <tr>
+                            <td colSpan={4} style={{ textAlign: 'center', padding: '0.75rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                              <span className="pulse-dot" style={{ display: 'inline-block', marginRight: '0.5rem' }}></span> Loading more records...
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>

@@ -11,7 +11,9 @@ declare global {
   }
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || 'charlotte_super_secret_jwt_sign_key_change_me_in_production';
+import { requireEnv } from '../utils/env.js';
+
+const JWT_SECRET = requireEnv('JWT_SECRET');
 
 /**
  * Express middleware to authenticate users via JWT and scope the current execution thread
