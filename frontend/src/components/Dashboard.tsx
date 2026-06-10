@@ -49,10 +49,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
     setForwardingNumber(tenant.destinationNumber);
   }, [tenant]);
 
-  // Provisioned lines (starts with a mock or empty, updated dynamically)
-  const [provisionedLines, setProvisionedLines] = useState<any[]>([
-    { id: '1', phoneNumber: '+15125550199', friendlyName: 'Charlotte Main Hotline' }
-  ]);
+  // Provisioned lines (updated dynamically)
+  const [provisionedLines, setProvisionedLines] = useState<any[]>([]);
 
   // Call Logs & Live Streaming States
   const [callLogs, setCallLogs] = useState<CallLog[]>([]);
@@ -92,12 +90,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
         });
         if (response.ok) {
           const data = await response.json();
-          if (data.numbers && data.numbers.length > 0) {
+          if (data.numbers) {
             setProvisionedLines(data.numbers);
-          } else {
-            setProvisionedLines([
-              { id: '1', phoneNumber: '+15125550199', friendlyName: 'Charlotte Main Hotline' }
-            ]);
           }
         }
       } catch (error) {
