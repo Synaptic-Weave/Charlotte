@@ -4,9 +4,11 @@ import config from '../src/mikro-orm.config.js';
 import { Tenant } from '../src/domain/entities/Tenant.js';
 import { User } from '../src/domain/entities/User.js';
 import { Organization } from '../src/domain/entities/Organization.js';
+import { Customer } from '../src/domain/entities/Customer.js';
 import { TenantSchema } from '../src/domain/schemas/Tenant.schema.js';
 import { UserSchema } from '../src/domain/schemas/User.schema.js';
 import { OrganizationSchema } from '../src/domain/schemas/Organization.schema.js';
+import { CustomerSchema } from '../src/domain/schemas/Customer.schema.js';
 
 describe('Domain Entities and Companion Schemas', () => {
   let orm: MikroORM;
@@ -15,8 +17,8 @@ describe('Domain Entities and Companion Schemas', () => {
     // Initialize ORM without connecting to database to discover metadata
     orm = await MikroORM.init({
       ...config,
-      entities: [TenantSchema, UserSchema, OrganizationSchema],
-      entitiesTs: [TenantSchema, UserSchema, OrganizationSchema],
+      entities: [TenantSchema, UserSchema, OrganizationSchema, CustomerSchema],
+      entitiesTs: [TenantSchema, UserSchema, OrganizationSchema, CustomerSchema],
       connect: false,
     });
   });
@@ -33,6 +35,7 @@ describe('Domain Entities and Companion Schemas', () => {
     expect(metadata.has('Tenant')).toBe(true);
     expect(metadata.has('User')).toBe(true);
     expect(metadata.has('Organization')).toBe(true);
+    expect(metadata.has('Customer')).toBe(true);
 
     const tenantMeta = metadata.get('Tenant');
     expect(tenantMeta.tableName).toBe('tenants');
@@ -85,6 +88,19 @@ describe('Domain Entities and Companion Schemas', () => {
     expect(org.name).toBe('Engineering Dept');
     expect(org.createdAt).toBeInstanceOf(Date);
     expect(org.updatedAt).toBeInstanceOf(Date);
+  });
+
+  it('should instantiate Customer via static factory method', () => {
+    const tenant = Tenant.create('Acme Corp', '+15551234567');
+    const customer = Customer.create(tenant, 'Jane Doe', '+15550001111', 'VIP client');
+    expect(customer).toBeInstanceOf(Customer);
+    expect(customer.id).toBeDefined();
+    expect(customer.tenant).toBe(tenant);
+    expect(customer.name).toBe('Jane Doe');
+    expect(customer.phoneNumber).toBe('+15550001111');
+    expect(customer.context).toBe('VIP client');
+    expect(customer.createdAt).toBeInstanceOf(Date);
+    expect(customer.updatedAt).toBeInstanceOf(Date);
   });
 
   it('should verify that domain entities are completely decorator-free and decoupled from Mikro-ORM', () => {

@@ -128,6 +128,7 @@ export function createWebhooksRouter(em: EntityManager): Router {
       <Parameter name="tenantId" value="${tenantId}" />
       <Parameter name="callSid" value="${callSid}" />
       <Parameter name="dialedNumber" value="${dialedNumber}" />
+      <Parameter name="callerNumber" value="${callerNumber}" />
     </Stream>
   </Connect>
 </Response>`;
