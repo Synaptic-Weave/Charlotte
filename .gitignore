@@ -49,3 +49,8 @@ ehthumbs.db
 
 # Diagnostic files
 npm-debug.log*
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*

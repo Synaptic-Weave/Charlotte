@@ -3,6 +3,7 @@ import { IncomingMessage } from 'http';
 import { EntityManager } from '@mikro-orm/postgresql';
 import twilio from 'twilio';
 import { GoogleGenAI } from '@google/genai';
+import jwt from 'jsonwebtoken';
 import { Tenant } from '../domain/entities/Tenant.js';
 import { CallSession } from '../domain/entities/CallSession.js';
 import { TwilioPhoneNumber } from '../domain/entities/TwilioPhoneNumber.js';
@@ -20,10 +21,70 @@ const geminiApiKey = process.env.GEMINI_API_KEY;
 const hasGeminiKey = geminiApiKey && !geminiApiKey.startsWith('AIzaSyMock');
 const ai = hasGeminiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
 
+const JWT_SECRET = process.env.JWT_SECRET || 'charlotte_super_secret_jwt_sign_key_change_me_in_production';
+
+export interface DashboardClient {
+  ws: WebSocket;
+  tenantId: string;
+}
+
+export const dashboardClients = new Set<DashboardClient>();
+
+export function broadcastDashboardUpdate(tenantId: string, payload: any): void {
+  const message = JSON.stringify(payload);
+  console.log(`[WebSocket Broadcast] Broadcasting updates to tenant ${tenantId}. Payload:`, payload);
+  for (const client of dashboardClients) {
+    if (client.tenantId === tenantId && client.ws.readyState === WebSocket.OPEN) {
+      try {
+        client.ws.send(message);
+      } catch (err) {
+        console.error(`[WebSocket Broadcast] Failed to send update to client:`, err);
+      }
+    }
+  }
+}
+
 export function registerStreamHandler(wss: WebSocketServer, em: EntityManager): void {
   wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
-    // Only handle connection on /api/streams
     const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
+
+    if (url.pathname === '/api/ws/updates') {
+      const token = url.searchParams.get('token');
+      if (!token) {
+        console.log('[WebSocket Updates] Connection rejected: Missing token query parameter.');
+        ws.close(4001, 'Authentication token required');
+        return;
+      }
+
+      try {
+        const decoded = jwt.verify(token, JWT_SECRET) as jwt.JwtPayload & { tenantId: string };
+        const tenantId = decoded.tenantId;
+        if (!tenantId) {
+          console.log('[WebSocket Updates] Connection rejected: Token missing tenantId claim.');
+          ws.close(4003, 'Invalid token claims');
+          return;
+        }
+
+        const client: DashboardClient = { ws, tenantId };
+        dashboardClients.add(client);
+        console.log(`[WebSocket Updates] Client subscribed successfully for Tenant ID: ${tenantId}`);
+
+        ws.on('close', () => {
+          dashboardClients.delete(client);
+          console.log(`[WebSocket Updates] Client unsubscribed for Tenant ID: ${tenantId}`);
+        });
+
+        ws.on('error', (err) => {
+          console.error(`[WebSocket Updates] Client connection error:`, err);
+          dashboardClients.delete(client);
+        });
+      } catch (err) {
+        console.log('[WebSocket Updates] Connection rejected: Invalid token.', err);
+        ws.close(4002, 'Invalid authentication token');
+      }
+      return;
+    }
+
     if (url.pathname !== '/api/streams') {
       console.log(`[WebSocket] Rejecting connection to path: ${url.pathname}`);
       ws.close(4004, 'Invalid streaming path');
@@ -90,9 +151,21 @@ export function registerStreamHandler(wss: WebSocketServer, em: EntityManager): 
                 if (callSession) {
                   callSession.updateStreamSid(streamSid!);
                   callSession.updateStatus('active');
+
+                  // Manually append the welcome greeting to the database transcript immediately
+                  const greetingText = `Hello, thanks for calling ${activeTenant.name}, how can I assist you?`;
+                  const greetingMsg = {
+                    id: `msg-greet-${Date.now()}`,
+                    speaker: 'charlotte' as const,
+                    text: greetingText,
+                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                  };
+                  callSession.addMessage(greetingMsg);
+
                   txEm.persist(callSession);
                   await txEm.flush();
-                  console.log(`[Twilio Stream] Updated CallSession ${callSession.id} state to "active".`);
+                  console.log(`[Twilio Stream] Updated CallSession ${callSession.id} state to "active" and appended welcome greeting.`);
+                  broadcastDashboardUpdate(tenantId!, { event: 'calls_updated' });
                 } else {
                   console.error(`[Twilio Stream] CallSession with CallSid ${callSid} not found in database.`);
                 }
@@ -156,10 +229,94 @@ Never tell the caller to call another number or try another way; always use the 
                         ],
                       },
                     ],
+                    inputAudioTranscription: {},
+                    outputAudioTranscription: {},
                   },
                   callbacks: {
                     onmessage: async (serverMsg: any) => {
                       try {
+                        // Handle real-time audio transcriptions
+                        const inputTx = serverMsg.serverContent?.inputTranscription;
+                        if (inputTx && inputTx.text && tenantId && callSid) {
+                          const userText = inputTx.text.trim();
+                          if (userText) {
+                            console.log(`[Twilio Stream] User Transcription: ${userText}`);
+                            await tenantLocalStorage.run({ tenantId }, async () => {
+                              await runInTenantTransaction(em, async (txEm) => {
+                                const callSession = await txEm.findOne(CallSession, { callSid });
+                                if (callSession) {
+                                  const lastMsg = callSession.messages && callSession.messages.length > 0
+                                    ? callSession.messages[callSession.messages.length - 1]
+                                    : null;
+
+                                  if (lastMsg && lastMsg.speaker === 'caller') {
+                                    lastMsg.text = `${lastMsg.text} ${userText}`.trim();
+                                    callSession.messages = [...callSession.messages];
+                                    callSession.updatedAt = new Date();
+                                  } else {
+                                    const newMsg = {
+                                      id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                                      speaker: 'caller' as const,
+                                      text: userText,
+                                      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                                    };
+                                    callSession.addMessage(newMsg);
+                                  }
+
+                                  txEm.persist(callSession);
+                                  await txEm.flush();
+                                  console.log(`[Twilio Stream] User transcript appended/merged to CallSession ${callSession.id}`);
+                                  broadcastDashboardUpdate(tenantId!, { event: 'calls_updated' });
+                                }
+                              });
+                            });
+                          }
+                        }
+
+                        const outputTx = serverMsg.serverContent?.outputTranscription;
+                        if (outputTx && outputTx.text && tenantId && callSid) {
+                          const agentText = outputTx.text.trim();
+                          if (agentText) {
+                            // Check for welcome greeting to deduplicate
+                            const isGreeting = agentText.toLowerCase().includes('thanks for calling') &&
+                                               agentText.toLowerCase().includes('how can i assist');
+                            if (isGreeting) {
+                              console.log(`[Twilio Stream] Ignoring streaming agent greeting to avoid duplication: "${agentText}"`);
+                            } else {
+                              console.log(`[Twilio Stream] Agent Transcription: ${agentText}`);
+                              await tenantLocalStorage.run({ tenantId }, async () => {
+                                await runInTenantTransaction(em, async (txEm) => {
+                                  const callSession = await txEm.findOne(CallSession, { callSid });
+                                  if (callSession) {
+                                    const lastMsg = callSession.messages && callSession.messages.length > 0
+                                      ? callSession.messages[callSession.messages.length - 1]
+                                      : null;
+
+                                    if (lastMsg && lastMsg.speaker === 'charlotte') {
+                                      lastMsg.text = `${lastMsg.text} ${agentText}`.trim();
+                                      callSession.messages = [...callSession.messages];
+                                      callSession.updatedAt = new Date();
+                                    } else {
+                                      const newMsg = {
+                                        id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                                        speaker: 'charlotte' as const,
+                                        text: agentText,
+                                        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                                      };
+                                      callSession.addMessage(newMsg);
+                                    }
+
+                                    txEm.persist(callSession);
+                                    await txEm.flush();
+                                    console.log(`[Twilio Stream] Agent transcript appended/merged to CallSession ${callSession.id}`);
+                                    broadcastDashboardUpdate(tenantId!, { event: 'calls_updated' });
+                                  }
+                                });
+                              });
+                            }
+                          }
+                        }
+
                         // 1. Handle incoming model audio stream response
                         const parts = serverMsg.serverContent?.modelTurn?.parts;
                         if (parts) {
@@ -364,6 +521,7 @@ Never tell the caller to call another number or try another way; always use the 
                 txEm.persist(callSession);
                 await txEm.flush();
                 console.log(`[Twilio Stream] Updated CallSession ${callSession.id} state to "completed".`);
+                broadcastDashboardUpdate(tenantId!, { event: 'calls_updated' });
               }
             });
           });

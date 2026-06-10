@@ -9,11 +9,6 @@ variable "region" {
   default     = "us-central1"
 }
 
-variable "db_password" {
-  description = "The password for the Cloud SQL PostgreSQL database user"
-  type        = string
-  sensitive   = true
-}
 
 variable "db_user" {
   description = "The database user for PostgreSQL"
@@ -78,11 +73,11 @@ variable "jwt_secret" {
 variable "backend_image" {
   description = "The Docker image URI for the Charlotte backend service"
   type        = string
-  default     = "gcr.io/my-project/charlotte-backend:latest"
+  default     = "us-central1-docker.pkg.dev/charlotte-sw/charlotte-repo/charlotte-backend:latest"
 }
 
 variable "frontend_image" {
   description = "The Docker image URI for the Charlotte frontend service"
   type        = string
-  default     = "gcr.io/my-project/charlotte-frontend:latest"
+  default     = "us-central1-docker.pkg.dev/charlotte-sw/charlotte-repo/charlotte-frontend:latest"
 }

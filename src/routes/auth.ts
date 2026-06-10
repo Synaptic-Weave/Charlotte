@@ -8,7 +8,9 @@ import { Organization } from '../domain/entities/Organization.js';
 import { tenantLocalStorage, runInTenantTransaction } from '../db/context.js';
 import { authenticateToken } from '../middleware/auth.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'charlotte_super_secret_jwt_sign_key_change_me_in_production';
+import { requireEnv } from '../utils/env.js';
+
+const JWT_SECRET = requireEnv('JWT_SECRET');
 
 export function createAuthRouter(em: EntityManager): Router {
   const router = Router();
