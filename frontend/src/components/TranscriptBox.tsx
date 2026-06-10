@@ -3,7 +3,7 @@ import { Phone, MessageSquare, ShieldAlert } from 'lucide-react';
 
 export interface TranscriptMessage {
   id: string;
-  speaker: 'charlotte' | 'caller';
+  speaker: 'charlotte' | 'caller' | 'agent' | 'user';
   text: string;
   timestamp?: string;
 }
@@ -22,13 +22,26 @@ export const TranscriptBox: React.FC<TranscriptBoxProps> = ({
   tenantName,
 }) => {
   const boxRef = useRef<HTMLDivElement>(null);
+  const prevLengthRef = useRef(messages.length);
+  const prevPhoneRef = useRef(sessionPhone);
 
-  // Auto scroll to bottom when messages are appended
+
+
+  // Auto scroll to bottom under specific UX rules
   useEffect(() => {
+    const hasNewMessage = messages.length > prevLengthRef.current;
+    const changedCall = sessionPhone !== prevPhoneRef.current;
+
     if (boxRef.current) {
-      boxRef.current.scrollTop = boxRef.current.scrollHeight;
+      if (changedCall || (status === 'active' && hasNewMessage)) {
+        boxRef.current.scrollTop = boxRef.current.scrollHeight;
+      }
     }
-  }, [messages]);
+
+    prevLengthRef.current = messages.length;
+    prevPhoneRef.current = sessionPhone;
+  }, [messages, sessionPhone, status]);
+
 
   return (
     <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '1.25rem' }}>
@@ -102,7 +115,7 @@ export const TranscriptBox: React.FC<TranscriptBoxProps> = ({
           </div>
         ) : (
           messages.map((msg) => {
-            const isCharlotte = msg.speaker === 'charlotte';
+            const isCharlotte = msg.speaker === 'charlotte' || msg.speaker === 'agent';
             return (
               <div 
                 key={msg.id} 
@@ -113,7 +126,7 @@ export const TranscriptBox: React.FC<TranscriptBoxProps> = ({
                 }}
               >
                 <span className="speaker-label">
-                  {isCharlotte ? 'Charlotte (Virtual AI)' : 'Michael (Caller)'}
+                  {isCharlotte ? `${tenantName || 'Charlotte'} (AI Agent)` : 'Caller'}
                 </span>
                 <div>{msg.text}</div>
                 {msg.timestamp && (

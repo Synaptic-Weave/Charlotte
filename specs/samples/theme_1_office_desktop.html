@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Charlotte - Bright Office Desktop</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #fcfbfa; /* Soft warm ivory */
+            --accent: #0d9488; /* Emerald-Teal */
+            --cta-grad: linear-gradient(135deg, #0d9488, #0ea5e9);
+            --card-bg: rgba(255, 254, 252, 0.8);
+            --card-border: rgba(224, 218, 208, 0.4);
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --font-head: 'Outfit', sans-serif;
+            --font-body: 'Inter', sans-serif;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: var(--font-body);
+            background-color: var(--bg-color);
+            background-image: radial-gradient(circle at 100% 0%, rgba(13, 148, 136, 0.05) 0%, transparent 25%),
+                              radial-gradient(circle at 0% 100%, rgba(14, 165, 233, 0.05) 0%, transparent 25%);
+            color: var(--text-main);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        h1, h2, h3 { font-family: var(--font-head); margin-top: 0; }
+
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border-right: 1px solid var(--card-border);
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-family: var(--font-head);
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        
+        .brand-icon {
+            width: 32px;
+            height: 32px;
+            background: var(--cta-grad);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2rem;
+        }
+
+        .nav-link {
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            background: rgba(13, 148, 136, 0.1);
+            color: var(--accent);
+        }
+
+        /* Main Content */
+        .main {
+            flex: 1;
+            padding: 3rem;
+            overflow-y: auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2.5rem;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .header p {
+            color: var(--text-muted);
+            margin: 0;
+        }
+
+        .btn {
+            background: var(--cta-grad);
+            color: white;
+            border: none;
+            padding: 0.875rem 1.5rem;
+            border-radius: 10px;
+            font-family: var(--font-head);
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 12px rgba(13, 148, 136, 0.2);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(13, 148, 136, 0.3);
+        }
+
+        /* Grid & Cards */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        
+        .card-title {
+            font-family: var(--font-head);
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .status-badge {
+            background: rgba(13, 148, 136, 0.1);
+            color: var(--accent);
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .metric {
+            font-size: 2.5rem;
+            font-weight: 700;
+            font-family: var(--font-head);
+            margin-bottom: 0.5rem;
+            color: var(--text-main);
+        }
+        
+        .metric-sub {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .list-group {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .list-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid var(--card-border);
+        }
+        
+        .list-item:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+    </style>
+</head>
+<body>
+
+    <aside class="sidebar">
+        <div class="brand">
+            <div class="brand-icon">C</div>
+            Charlotte
+        </div>
+        <nav>
+            <a href="#" class="nav-link active">Dashboard</a>
+            <a href="#" class="nav-link">Call Logs</a>
+            <a href="#" class="nav-link">Phone Numbers</a>
+            <a href="#" class="nav-link">Prompts & AI</a>
+            <a href="#" class="nav-link">Settings</a>
+        </nav>
+    </aside>
+
+    <main class="main">
+        <div class="header">
+            <div>
+                <h1>Good morning, Sarah.</h1>
+                <p>Charlotte is actively routing calls for your business.</p>
+            </div>
+            <button class="btn">+ Buy Phone Number</button>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Calls Today</span>
+                    <span class="status-badge">Active</span>
+                </div>
+                <div class="metric">124</div>
+                <div class="metric-sub">+12% from yesterday</div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Average Duration</span>
+                </div>
+                <div class="metric">2m 14s</div>
+                <div class="metric-sub">Optimal handling time</div>
+            </div>
+            
+            <div class="card" style="grid-column: 1 / -1;">
+                <div class="card-header">
+                    <span class="card-title">Recent Conversations</span>
+                </div>
+                <ul class="list-group">
+                    <li class="list-item">
+                        <div>
+                            <strong>+1 (555) 019-2834</strong>
+                            <div class="metric-sub">Inquired about office hours</div>
+                        </div>
+                        <span class="text-muted">2 mins ago</span>
+                    </li>
+                    <li class="list-item">
+                        <div>
+                            <strong>+1 (555) 832-1192</strong>
+                            <div class="metric-sub">Transferred to support</div>
+                        </div>
+                        <span class="text-muted">15 mins ago</span>
+                    </li>
+                    <li class="list-item">
+                        <div>
+                            <strong>+1 (555) 774-9021</strong>
+                            <div class="metric-sub">Left a voicemail regarding billing</div>
+                        </div>
+                        <span class="text-muted">1 hour ago</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </main>
+
+</body>
+</html>
