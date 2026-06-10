@@ -14,7 +14,7 @@ const twilioClient = isTwilioConfigured ? twilio(accountSid, authToken) : null;
 // Setup Twilio webhook validator middleware
 const validateTwilio = (req: any, res: any, next: any) => {
   const authToken = process.env.TWILIO_AUTH_TOKEN;
-  if (process.env.NODE_ENV !== 'production' || !authToken) {
+  if (!authToken) {
     return next();
   }
 
@@ -53,14 +53,14 @@ export function createWebhooksRouter(em: EntityManager): Router {
    */
   router.post('/twilio/inbound-call', validateTwilio, async (req, res) => {
     try {
-      const { To: dialedNumber, CallSid: callSid } = req.body;
+      const { To: dialedNumber, CallSid: callSid, From: callerNumber } = req.body;
 
       if (!dialedNumber || !callSid) {
         res.status(400).send('Missing required Twilio webhook parameters (To, CallSid).');
         return;
       }
 
-      console.log(`[Webhook] Inbound call received. To: ${dialedNumber}, CallSid: ${callSid}`);
+      console.log(`[Webhook] Inbound call received. To: ${dialedNumber}, CallSid: ${callSid}, From: ${callerNumber}`);
 
       // 1. Resolve Tenant from dialed E.164 phone number
       // We fork the main EM to query across all rows (as admin / owner) since we don't have the tenant context yet.
@@ -94,7 +94,7 @@ export function createWebhooksRouter(em: EntityManager): Router {
           // Check if session already exists
           const existing = await txEm.findOne(CallSession, { callSid });
           if (!existing) {
-            const callSession = CallSession.create(tenant, callSid);
+            const callSession = CallSession.create(tenant, callSid, callerNumber || 'Unknown');
             txEm.persist(callSession);
             await txEm.flush();
             console.log(`[Webhook] Created new CallSession in "initiated" status: ${callSession.id}`);
