@@ -5,6 +5,7 @@ name: Continuous Deployment
   push:
     branches:
       - main
+  workflow_dispatch:
 
 # yamllint disable rule:line-length
 env:
