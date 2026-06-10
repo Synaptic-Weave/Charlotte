@@ -6,7 +6,7 @@ Vapi is a voice AI platform that provides the infrastructure for developers to b
 
 ## Pricing
 
-Source: https://vapi.ai/pricing
+Source: <https://vapi.ai/pricing>
 (To be filled in after reviewing pricing page)
 
 ## Positioning Relative to Charlotte

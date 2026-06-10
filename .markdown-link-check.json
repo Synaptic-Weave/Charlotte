@@ -1,6 +1,10 @@
 {
   "ignorePatterns": [
     {
+      "pattern": "^/Users/",
+      "comment": "Ignore absolute paths from local machine"
+    },
+    {
       "pattern": "^file://",
       "comment": "Local file:// paths are valid on the author's machine but don't resolve in CI"
     },

@@ -21,6 +21,9 @@
   ],
   "author": "Synaptic Weave",
   "license": "Private",
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "dependencies": {
     "@google/adk": "^0.1.0",
     "@mikro-orm/core": "^6.2.8",

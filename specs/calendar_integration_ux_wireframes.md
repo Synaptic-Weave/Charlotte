@@ -45,6 +45,7 @@
 ## 3. Wireframes
 
 ### View A: Integrations Dashboard
+
 ```text
 +--------------------------------------------------------------------------+
 |  +----------------+  Integrations                                        |
@@ -71,6 +72,7 @@
 ```
 
 ### View B: Post-OAuth Configuration Modal (Glassmorphism Overlay)
+
 ```text
 +--------------------------------------------------------------------------+
 |                                                                          |

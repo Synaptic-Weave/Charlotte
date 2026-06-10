@@ -1,4 +1,5 @@
 # UX Design System & Page Flow Specifications
+
 ## Charlotte AI Virtual Receptionist — Multi-Tenant SaaS Console
 
 **Role:** Trinity — UX Architect for Charlotte  
@@ -12,9 +13,10 @@
 Charlotte is not a sterile enterprise machine; she is a friendly, supportive, and polite virtual receptionist. The user interface must feel approachably warm, premium, and frictionless.
 
 ### 1.1. Personality & Tone Guidelines
-*   **Approachably Warm:** Soft borders, gentle curves, friendly micro-copy, and intuitive helper tooltips.
-*   **Premium & High-Fidelity:** Clean modern typography, glassmorphism backdrops, glowing subtle gradient borders, and smooth transition states.
-*   **Frictionless & Fast:** Complex telecom provisioning actions are streamlined into step-by-step wizard guides with active progress feedback.
+
+* **Approachably Warm:** Soft borders, gentle curves, friendly micro-copy, and intuitive helper tooltips.
+* **Premium & High-Fidelity:** Clean modern typography, glassmorphism backdrops, glowing subtle gradient borders, and smooth transition states.
+* **Frictionless & Fast:** Complex telecom provisioning actions are streamlined into step-by-step wizard guides with active progress feedback.
 
 ### 1.2. Core Design Tokens (CSS Variables)
 
@@ -23,7 +25,7 @@ Our core design tokens are codified in standard CSS variables inside [`frontend/
 | Token Category | Dark Mode (Default: "Deep Sky") | Light Mode ("Bright Office") | Usage |
 | :--- | :--- | :--- | :--- |
 | **Primary Background** | `hsl(232, 39%, 7%)` (Deep Indigo-Black) | `hsl(30, 20%, 98%)` (Warm Ivory) | Global app canvas backdrop |
-| **Secondary Background**| `hsl(232, 39%, 10%)` (Deep Indigo-Gray) | `hsl(30, 15%, 94%)` (Warm Soft-Gray) | Sidebars, tables, and headers |
+| **Secondary Background** | `hsl(232, 39%, 10%)` (Deep Indigo-Gray) | `hsl(30, 15%, 94%)` (Warm Soft-Gray) | Sidebars, tables, and headers |
 | **Accent / Focus** | `hsl(172, 77%, 42%)` (Electric Aqua-Teal) | `hsl(172, 80%, 35%)` (Emerald-Teal) | Active state indicators, focus borders |
 | **CTA Gradient** | `linear-gradient(135deg, Teal, Indigo)` | `linear-gradient(135deg, Teal, Sky-Blue)` | Primary trigger buttons, active items |
 | **Glass Containers** | `hsla(232, 33%, 12%, 0.6)` (Blur: `12px`) | `hsla(30, 100%, 99%, 0.8)` (Blur: `12px`) | Glassmorphic dashboards and popup cards |
@@ -66,7 +68,8 @@ graph TD
     class M default;
 ```
 
-### Flow Details:
+### Flow Details
+
 1. **User Sign Up:** Leverages GCP Identity Platform / Google Cloud OAuth (JWT token-based). The JWT contains custom claims matching the user's role and `tenant_id`.
 2. **Workspace Creation:** Creates a clean, isolated Postgres row in the `tenants` table. No database resources are shared without strict foreign key filtering.
 3. **Plan Selection:** Stripe checkout links billing details to prevent invalid signups.
@@ -81,7 +84,8 @@ graph TD
 These blueprints define our responsive, glassmorphic grids, component layouts, and typographic hierarchies.
 
 ### 3.1. Main Dashboard Console
-```
+
+```text
 +---------------------------------------------------------------------------------------------------------+
 | [C] Charlotte.ai   | (Active Tenant: Brown Consulting [v])                    [Light/Dark] [User Avatar] |
 +---------------------------------------------------------------------------------------------------------+
@@ -115,7 +119,8 @@ These blueprints define our responsive, glassmorphic grids, component layouts, a
 ```
 
 ### 3.2. Twilio Provisioning & Number Purchasing Screen (Wizard Step 2)
-```
+
+```text
 +---------------------------------------------------------------------------------------------------------+
 | [C] Charlotte.ai   | Step 2 of 3: Provision Your AI Phone Line                                          |
 +---------------------------------------------------------------------------------------------------------+
@@ -158,7 +163,8 @@ These blueprints define our responsive, glassmorphic grids, component layouts, a
 ```
 
 ### 3.3. Settings & Brain Configuration Editor
-```
+
+```text
 +---------------------------------------------------------------------------------------------------------+
 | [C] Charlotte.ai   | Settings & Customizations                                                          |
 +---------------------------------------------------------------------------------------------------------+
@@ -200,7 +206,7 @@ These blueprints define our responsive, glassmorphic grids, component layouts, a
 
 The modular component structure is built using standard functional elements, keeping presentation isolated from business logic.
 
-```
+```text
 frontend/src/
 ├── index.css (Global Design System Styles & Animation Keyframes)
 ├── main.tsx (Entry Point)
@@ -236,7 +242,9 @@ frontend/src/
 We use clean React context providers to share unified SaaS states across layout trees.
 
 ### 5.1. Authentication State (`AuthContext`)
+
 Tracks authenticated user profile, secure claims, and API headers.
+
 ```typescript
 interface AuthState {
   isAuthenticated: boolean;
@@ -248,7 +256,9 @@ interface AuthState {
 ```
 
 ### 5.2. Number Provisioning State (`PhoneLinesContext`)
+
 Orchestrates synchronous purchasing sequences and active progress parameters.
+
 ```typescript
 interface PhoneLinesState {
   searchQuery: {
@@ -282,15 +292,17 @@ interface PhoneLinesState {
 Every user action mapped in our ASCII interfaces communicates with our isolated SaaS backend endpoints:
 
 ### 6.1. Registration & Auth Endpoints
-*   `POST /api/auth/register` - Creates account and returns identity verification.
-*   `POST /api/tenants` - Establishes brand new Postgres Tenant Workspace, initializing `tenant_id` and setting creator role to `Owner`.
+
+* `POST /api/auth/register` - Creates account and returns identity verification.
+* `POST /api/tenants` - Establishes brand new Postgres Tenant Workspace, initializing `tenant_id` and setting creator role to `Owner`.
 
 ### 6.2. Phone Number Provisioning (Twilio Programmatic Sub-Accounts Option B)
-*   `GET /api/tenants/numbers/search` - Hits Twilio REST API to query 10 active phone records.
-    *   **Parameters:** `country` (defaults to US/CA), `type` ('local' | 'tollFree'), `areaCode` (3 digits).
-*   `POST /api/tenants/numbers/provision` - Submits transactional checkout.
-    *   **Payload:** `{ phoneNumber: "+15125550199" }`
-    *   **Backend Steps:**
+
+* `GET /api/tenants/numbers/search` - Hits Twilio REST API to query 10 active phone records.
+  * **Parameters:** `country` (defaults to US/CA), `type` ('local' | 'tollFree'), `areaCode` (3 digits).
+* `POST /api/tenants/numbers/provision` - Submits transactional checkout.
+  * **Payload:** `{ phoneNumber: "+15125550199" }`
+  * **Backend Steps:**
         1. Confirms Stripe credit status.
         2. Spins up programmatically a new Twilio Sub-Account (**Option B** isolation).
         3. Invokes `/v1/Accounts/{Sub_Sid}/IncomingPhoneNumbers` to buy number.
@@ -298,22 +310,24 @@ Every user action mapped in our ASCII interfaces communicates with our isolated 
         5. Saves row to Postgres `phone_numbers` table.
 
 ### 6.3. Receptionist Brain Configurations
-*   `GET /api/tenants/receptionist/config` - Fetches active prompts, FAQs context, and escalation phone numbers.
-*   `POST /api/tenants/receptionist/config` - Overwrites the active receptionist prompt. Re-initializes system parameters inside the Google ADK instance.
+
+* `GET /api/tenants/receptionist/config` - Fetches active prompts, FAQs context, and escalation phone numbers.
+* `POST /api/tenants/receptionist/config` - Overwrites the active receptionist prompt. Re-initializes system parameters inside the Google ADK instance.
 
 ### 6.4. Live Call Overviews & Session Queries
-*   `GET /api/tenants/dashboard/metrics` - Aggregates counts, average durations, and response rates.
-*   `GET /api/tenants/calls` - Queries historical Call Logs with filters and search parameters.
-*   `GET /api/tenants/calls/:call_id/transcript` - Returns complete human-readable transcript strings and voice record URLs (stored on secure Cloud Storage boundaries).
+
+* `GET /api/tenants/dashboard/metrics` - Aggregates counts, average durations, and response rates.
+* `GET /api/tenants/calls` - Queries historical Call Logs with filters and search parameters.
+* `GET /api/tenants/calls/:call_id/transcript` - Returns complete human-readable transcript strings and voice record URLs (stored on secure Cloud Storage boundaries).
 
 ---
 
 ## Blog Entry
 
-Designing the multi-tenant UX architecture for Charlotte felt less like constructing a standard SaaS portal and more like creating a cozy, welcoming lobby for business owners. When we set out to build her interface, my absolute focus was ensuring Charlotte’s core brand ethos—that she is a "Friendly Helper"—translated into every pixel, form field, and loading transition. We rejected the typical cold, clinical layout often found in enterprise communication setups. Instead, we crafted a dark-mode default we call "Deep Sky"—a rich, relaxing canvas of indigo tones highlighted by glowing neon-teal focus borders, translucent glassmorphism cards, and interactive buttons that scale softly on click. 
+Designing the multi-tenant UX architecture for Charlotte felt less like constructing a standard SaaS portal and more like creating a cozy, welcoming lobby for business owners. When we set out to build her interface, my absolute focus was ensuring Charlotte’s core brand ethos—that she is a "Friendly Helper"—translated into every pixel, form field, and loading transition. We rejected the typical cold, clinical layout often found in enterprise communication setups. Instead, we crafted a dark-mode default we call "Deep Sky"—a rich, relaxing canvas of indigo tones highlighted by glowing neon-teal focus borders, translucent glassmorphism cards, and interactive buttons that scale softly on click.
 
 From a user journey perspective, the telecom configuration has historically been the place where software onboarding goes to die. Complex regulatory paperwork, area code mappings, and slow backend API delays usually terrify business owners. By wrapping Twilio’s programmatic sub-account provisioning pipeline into an approachable three-step wizard, we transformed a frustrating administrative task into a delightful experience. Business owners can search for local or toll-free numbers, check total costs in a glassmorphic confirmation modal, and watch a friendly micro-animated loader complete the purchase—providing a live, customized, AI-driven phone agent in under five minutes.
 
 Under the hood, the frontend ties seamlessly into a highly modern React provider structure that respects secure tenant boundaries, utilizing the Google Agent Development Kit (ADK) and GCP Identity Platform (Google Cloud Identity). Each user flow and screen layout has been meticulously architected so that data isolation is robust and clear. The final product is a perfect fusion of aesthetic visual cues, empathetic micro-copy, and bulletproof engineering interfaces—giving business owners a premium dashboard where they feel supported, in control, and proud to have Charlotte welcoming their customers.
 
-**— Trinity, UX Architect for Charlotte**
+— Trinity, UX Architect for Charlotte

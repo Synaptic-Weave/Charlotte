@@ -4,6 +4,7 @@
 **Goal:** Address the "empty right-side" syndrome in the widescreen SaaS layout with playful, engaging, and friendly theme concepts that align with Charlotte's "Friendly Helper" philosophy.
 
 ## System Tech Stack & Constraints
+
 - **Stack:** Vite + React + TypeScript + Vanilla CSS
 - **Core Orchestration:** Google ADK + Gemini Live API
 - **Telecom:** Twilio REST APIs (Multi-tenant)
@@ -54,12 +55,15 @@
 ## Theme 1: The "Office Desktop" Theme
 
 ### Conceptual Overview
+
 A literal skeuomorphic desk metaphor. Instead of a sterile left-hand sidebar, the navigation items are represented as manila folders, sticky notes, and a notepad scattered across a desk mat. It feels deeply personal and approachable.
 
 ### Using the "Empty Space"
+
 The right side of the screen is occupied by a "Corkboard Widget" displaying dynamic visual elements: missed calls represented as pinned notes, a calendar of upcoming Twilio renewals, and a coffee cup that doubles as a quick link to account settings.
 
 ### ASCII Wireframe
+
 ```text
 +---------------------------------------------------------------------------------+
 |                                                                                 |
@@ -81,6 +85,7 @@ The right side of the screen is occupied by a "Corkboard Widget" displaying dyna
 ```
 
 ### Component Breakdown
+
 - **DeskMat (Container):** Handles the background ivory/indigo gradient.
 - **FolderTab (Nav):** Replaces traditional vertical sidebar items.
 - **NotepadWizard (Main Content):** A glassmorphic card shaped like a notepad for multi-step flows.
@@ -92,12 +97,15 @@ The right side of the screen is occupied by a "Corkboard Widget" displaying dyna
 ## Theme 2: The Retro Switchboard
 
 ### Conceptual Overview
+
 A nostalgic 1950s operator switchboard experience. Charlotte is the "operator", and the UI reflects brass dials, tactile toggle switches, and satisfying mechanical feedback. This fits perfectly with the virtual receptionist persona.
 
 ### Using the "Empty Space"
+
 The right empty space is transformed into a massive "Patch Bay". Users don't just assign prompts to phone numbers via a dropdown; they visually drag a "Patch Cable" from an active Twilio number on the left, to a glowing Prompt/Agent jack on the right.
 
 ### ASCII Wireframe
+
 ```text
 +---------------------------------------------------------------------------------+
 |  [DIALS: Vol, Tone]                  THE SWITCHBOARD                   [PWR]    |
@@ -115,6 +123,7 @@ The right empty space is transformed into a massive "Patch Bay". Users don't jus
 ```
 
 ### Component Breakdown
+
 - **SwitchboardChassis (Layout):** The main dark-mode indigo wrapper with subtle metallic highlights.
 - **LineIndicatorLED (Status):** Glowing teal (`var(--accent-dark)`) indicator for active numbers.
 - **PatchCableSVG (Interactive Tool):** An SVG canvas layer that draws a cubic bezier curve connecting two DOM elements.
@@ -126,12 +135,15 @@ The right empty space is transformed into a massive "Patch Bay". Users don't jus
 ## Theme 3: Holographic Assistant (Dynamic Companion)
 
 ### Conceptual Overview
+
 This theme relies heavily on our premium "Warm Space" glassmorphism tokens but brings Charlotte to life as a dynamic, interactive presence. A stylized, glowing orb or friendly abstract shape (Holographic Charlotte) resides permanently in the UI.
 
 ### Using the "Empty Space"
+
 The right column becomes the "Charlotte Companion Hub". While the user navigates complex tasks on the left, Charlotte hangs out on the right, providing conversational tips, displaying real-time audio visualizers when a call is happening, and offering to automate tasks ("Should I buy that number for you?").
 
 ### ASCII Wireframe
+
 ```text
 +---------------------------------------------------------------------------------+
 |  ~ Charlotte AI Console ~                                        [Profile]      |
@@ -152,6 +164,7 @@ The right column becomes the "Charlotte Companion Hub". While the user navigates
 ```
 
 ### Component Breakdown
+
 - **GlassCard (Wrapper):** `backdrop-filter: blur(12px)` on translucent warm cream.
 - **OrbVisualizer (Canvas/WebGL):** A breathing animation representing Charlotte's state (Idle, Listening, Thinking, Speaking).
 - **CompanionChatBubble (Contextual Help):** Dynamic micro-copy that updates based on the user's route or active step.
@@ -160,12 +173,14 @@ The right column becomes the "Charlotte Companion Hub". While the user navigates
 ---
 
 ## API Touchpoints
+
 - `POST /api/twilio/provision` (Spins up Sub-Account Option B, buys number)
 - `GET /api/twilio/available` (Fetches available numbers based on constraints)
 - `PUT /api/prompts/update` (Updates the Gemini Live instructions)
 - `GET /api/calls/logs` (Populates right-side widgets like Corkboard or Companion feed)
 
 ## State Requirements (Client-Side)
+
 - `ThemeContext`: Toggles Light/Dark and active playful theme override.
 - `useTwilioProvisioning()`: Manages the wizard step index (0-3), area code search term, selected number, and loading states.
 - `useCharlotteCompanion()` (Theme 3 specific): Manages the conversational state, active contextual tip, and animation state of the orb.
