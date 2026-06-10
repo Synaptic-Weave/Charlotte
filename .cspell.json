@@ -43,6 +43,7 @@
     "devskim",
     "djlint",
     "doesnt",
+    "isready",
     "jsonlint",
     "kics",
     "downsample",

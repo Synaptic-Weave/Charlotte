@@ -3,6 +3,7 @@
 ## Milestone 1: Data Architecture & Scaffolding
 
 ### Issue #1: Database Migrations & Entity Models for Calendar Integration
+
 **Assignee:** Architect
 **Labels:** `backend`, `database`, `mikro-orm`
 
@@ -12,6 +13,7 @@ I want to implement the database schema and Mikro-ORM entities for the Calendar 
 So that we have a secure, multi-tenant data foundation for storing connected accounts and calendar resources.
 
 **Acceptance Criteria:**
+
 - **Given** I am deploying the database changes,
   **When** I run the SQL migrations,
   **Then** tables for `integration_providers`, `connected_accounts`, `calendar_resources`, `booking_destinations`, `oauth_authorization_sessions`, and `connected_account_events` are created.
@@ -23,6 +25,7 @@ So that we have a secure, multi-tenant data foundation for storing connected acc
   **Then** the TypeScript entities strictly map to the tables and enforce tenant isolation.
 
 **Engineering Scope & Implementation Guidelines:**
+
 - Use the provided SQL Up/Down migrations from the `calendar_integration_domain_model.md` spec.
 - Create Mikro-ORM entity classes (Blue, Green, Yellow, Pink, Orange archetypes).
 - Enforce RLS policies for `tenant_id` to prevent cross-tenant data leaks.
@@ -34,6 +37,7 @@ So that we have a secure, multi-tenant data foundation for storing connected acc
 ## Milestone 2: OAuth & Core Integration Services
 
 ### Issue #2: Google Workspace OAuth 2.0 Flow & Token Management
+
 **Assignee:** Switch
 **Labels:** `backend`, `security`, `oauth`
 
@@ -43,6 +47,7 @@ I want to securely connect my Google Workspace account,
 So that Charlotte can access my calendar securely.
 
 **Acceptance Criteria:**
+
 - **Given** I am an admin on the integrations page,
   **When** I click to connect Google Calendar,
   **Then** the system generates an `OAuthAuthorizationSession` with a cryptographically secure `stateParameter` and returns the Google Auth URL.
@@ -54,6 +59,7 @@ So that Charlotte can access my calendar securely.
   **Then** the token is encrypted at rest using AES-256-GCM with `tenant_id` as Additional Authenticated Data (AAD).
 
 **Engineering Scope & Implementation Guidelines:**
+
 - Implement the `GET /api/v1/integrations/google/auth-url` endpoint.
 - Implement the `GET /api/v1/integrations/google/callback` endpoint.
 - Manage `oauth_authorization_sessions` (Pink Transaction) status updates (`PENDING` -> `COMPLETED`).
@@ -65,6 +71,7 @@ So that Charlotte can access my calendar securely.
 ## Milestone 3: API Endpoints for Resource Sync
 
 ### Issue #3: Calendar Resource Fetching & Booking Destination API
+
 **Assignee:** Switch
 **Labels:** `backend`, `api`, `google-api`
 
@@ -74,6 +81,7 @@ I want to retrieve a list of my available calendars and set one as my active boo
 So that Charlotte knows exactly where to read availability and write new appointments.
 
 **Acceptance Criteria:**
+
 - **Given** my Google account is successfully connected,
   **When** the frontend requests available calendars,
   **Then** the backend uses the decrypted refresh token to fetch calendars from the Google Calendar API and caches them in `calendar_resources`.
@@ -82,6 +90,7 @@ So that Charlotte knows exactly where to read availability and write new appoint
   **Then** the system creates or updates a `BookingDestination` (Yellow Role) record linked to that `CalendarResource`.
 
 **Engineering Scope & Implementation Guidelines:**
+
 - Implement `GET /api/v1/integrations/google/calendars` to list remote calendars.
 - Implement `POST /api/v1/integrations/google/preferences` to save the `selectedCalendarId`.
 - Integrate the official Google APIs Node.js client.
@@ -94,6 +103,7 @@ So that Charlotte knows exactly where to read availability and write new appoint
 ## Milestone 4: Frontend Integrations UI
 
 ### Issue #4: Integrations Dashboard UI & Card Components
+
 **Assignee:** Apoc
 **Labels:** `frontend`, `ui`, `react`
 
@@ -103,6 +113,7 @@ I want to view my available integrations and initiate the Google Calendar connec
 So that I can seamlessly begin the setup process.
 
 **Acceptance Criteria:**
+
 - **Given** I navigate to the Settings > Integrations page,
   **When** I view the "Google Calendar" integration card,
   **Then** it displays a "Not Connected" status badge.
@@ -111,6 +122,7 @@ So that I can seamlessly begin the setup process.
   **Then** the button shows a loading state (`isOAuthLoading = true`) and I am securely redirected to the Google consent screen.
 
 **Engineering Scope & Implementation Guidelines:**
+
 - Build the `IntegrationsPage` and `IntegrationCard` React components based on the `calendar_integration_ux_wireframes.md`.
 - Utilize the "Warm Space" Design System tokens (`--charlotte-bg-primary`, `--charlotte-cta-gradient`, etc.).
 - Ensure dark mode compatibility using the `prefers-color-scheme: dark` tokens.
@@ -118,6 +130,7 @@ So that I can seamlessly begin the setup process.
 - Implement unit tests via React Testing Library with 80% coverage.
 
 ### Issue #5: Post-OAuth Calendar Configuration Modal
+
 **Assignee:** Apoc
 **Labels:** `frontend`, `ui`, `react`
 
@@ -127,6 +140,7 @@ I want to be greeted by a configuration modal to select my target calendar,
 So that I can finalize the setup immediately without navigating away.
 
 **Acceptance Criteria:**
+
 - **Given** I am redirected back to the dashboard with a success parameter,
   **When** the page loads,
   **Then** the `CalendarConfigModal` automatically appears over a blurred backdrop.
@@ -138,6 +152,7 @@ So that I can finalize the setup immediately without navigating away.
   **Then** the modal transitions to a success state with a green checkmark and gracefully fades out.
 
 **Engineering Scope & Implementation Guidelines:**
+
 - Implement `CalendarConfigModal` utilizing `--charlotte-backdrop-blur` for the Glassmorphism overlay.
 - Manage frontend state (`showConfigModal`, `isFetchingCalendars`, `selectedCalendarId`, `isSavingConfig`).
 - Connect to `GET /api/v1/integrations/google/calendars` and `POST /api/v1/integrations/google/preferences`.

@@ -361,11 +361,13 @@ erDiagram
 **Tenant Boundary Enforcement:**
 
 1. **Mandatory `tenant_id` Columns:** Every operational table (`connected_accounts`, `calendar_resources`, `booking_destinations`, `oauth_authorization_sessions`, `connected_account_events`) strictly includes a `tenant_id` column to natively identify data ownership.
-2. **Foreign Key Scoping:** Entities don't just reference their parents by parent ID; queries must consistently propagate and assert the `tenant_id` (`WHERE tenant_id = $1 AND id = $2`). 
-3. **Row-Level Security (RLS):** For robust isolation, Postgres Row-Level Security policies should be enforced on all tables. 
+2. **Foreign Key Scoping:** Entities don't just reference their parents by parent ID; queries must consistently propagate and assert the `tenant_id` (`WHERE tenant_id = $1 AND id = $2`).
+3. **Row-Level Security (RLS):** For robust isolation, Postgres Row-Level Security policies should be enforced on all tables.
+
    ```sql
    CREATE POLICY tenant_isolation_policy ON connected_accounts 
    USING (tenant_id = current_setting('app.current_tenant_id')::UUID);
    ```
+
    This guarantees that even if an application bug omits the `WHERE` clause, cross-tenant data leaks are mathematically impossible at the database level.
 4. **Encryption with AAD:** The `encrypted_refresh_token` in `connected_accounts` must be encrypted at rest using a robust symmetric encryption algorithm (e.g., AES-256-GCM) with a securely managed KMS key. The `tenant_id` should be bound as Additional Authenticated Data (AAD) during the encryption of the refresh token. This guarantees that a stolen encrypted token from one tenant cannot be decrypted in the context of another tenant, serving as a secondary layer of isolation.

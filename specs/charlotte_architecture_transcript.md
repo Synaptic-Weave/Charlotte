@@ -100,7 +100,7 @@ def list_calendar_events(time_min: str, max_results: int = 5) -> list:
 
 ```
 
-3. **Handle Timezones:** LLMs operate statelessly and default to UTC. You must inject the user's explicit local timestamp and timezone into the runtime prompt context so the model can resolve relative phrases like "tomorrow at 3".
+1. **Handle Timezones:** LLMs operate statelessly and default to UTC. You must inject the user's explicit local timestamp and timezone into the runtime prompt context so the model can resolve relative phrases like "tomorrow at 3".
 
 ---
 
@@ -171,5 +171,5 @@ def handle_inbound_call(twilio_payload):
 
 ```
 
-3. **Context-Bound Tools:** Tools accept active tenant parameter arguments (like `tenant['calendar_id']`) resolved right out of the current session boundary, ensuring strict isolation between completely separate businesses.
-4. **ADK SkillToolsets Optimization:** Instead of stuffing every single FAQ document into the main system prompt (which wastes money and context window space), break them down into modular **Skills** in your database. Use ADK's native `SkillToolset` configuration to dynamically pull relevant guidelines into memory only when requested by the conversation.
+1. **Context-Bound Tools:** Tools accept active tenant parameter arguments (like `tenant['calendar_id']`) resolved right out of the current session boundary, ensuring strict isolation between completely separate businesses.
+2. **ADK SkillToolsets Optimization:** Instead of stuffing every single FAQ document into the main system prompt (which wastes money and context window space), break them down into modular **Skills** in your database. Use ADK's native `SkillToolset` configuration to dynamically pull relevant guidelines into memory only when requested by the conversation.
