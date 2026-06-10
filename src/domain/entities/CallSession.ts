@@ -65,16 +65,16 @@ export class CallSession {
     this.updatedAt = new Date();
   }
 
-<<<<<<< HEAD
   addMessage(msg: { id: string; speaker: 'charlotte' | 'caller'; text: string; timestamp?: string }): void {
     if (!this.messages) {
       this.messages = [];
     }
     this.messages.push(msg);
-=======
+    this.updatedAt = new Date();
+  }
+
   updateRecordingUrl(recordingUrl: string): void {
     this.recordingUrl = recordingUrl;
->>>>>>> b67ea74 (fix: persist voicemail recording URL on CallSession (closes #13))
     this.updatedAt = new Date();
   }
 }
