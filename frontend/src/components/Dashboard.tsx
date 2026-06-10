@@ -850,7 +850,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
                     className="input-field" 
                     style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}
                     readOnly
-                    value={`https://localhost:8080/api/webhook/twilio/inbound-call`}
+                    value={`${window.location.origin}/api/webhook/twilio/inbound-call`}
                   />
                 </div>
 
