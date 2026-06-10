@@ -1,0 +1,28 @@
+{
+  "ignorePatterns": [
+    {
+      "pattern": "^file://",
+      "comment": "Local file:// paths are valid on the author's machine but don't resolve in CI"
+    },
+    {
+      "pattern": "^https?://localhost",
+      "comment": "Localhost URLs only valid in local dev environment"
+    },
+    {
+      "pattern": "^https?://127\\.0\\.0\\.1",
+      "comment": "Loopback addresses only valid in local dev environment"
+    },
+    {
+      "pattern": "^https?://.*\\.ngrok",
+      "comment": "Ngrok tunnels are ephemeral and environment-specific"
+    },
+    {
+      "pattern": "^https://github\\.com/Synaptic-Weave/",
+      "comment": "Private repo URLs return 404 without auth token — skip in CI"
+    }
+  ],
+  "timeout": "20s",
+  "retryOn429": true,
+  "retryCount": 2,
+  "aliveStatusCodes": [200, 206, 302, 304]
+}

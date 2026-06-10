@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Charlotte - Retro Switchboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b0d19; /* Deep Slate Indigo background mapping to retro dark slate */
+            --panel-bg: rgba(21, 23, 42, 0.95);
+            --panel-border: rgba(20, 184, 166, 0.3);
+            --accent-off: #475569;
+            --accent-on: #14b8a6; /* Electric Aqua-Teal */
+            --accent-alert: #6366f1; /* Energetic Indigo-Purple */
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --font-head: 'Outfit', sans-serif;
+            --font-body: 'Inter', sans-serif;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: var(--font-body);
+            background-color: var(--bg-color);
+            background-image: 
+                linear-gradient(rgba(20, 184, 166, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(20, 184, 166, 0.03) 1px, transparent 1px);
+            background-size: 30px 30px;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .switchboard {
+            background: var(--panel-bg);
+            border: 2px solid var(--panel-border);
+            border-radius: 16px;
+            padding: 3rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8),
+                        inset 0 1px 2px rgba(255, 255, 255, 0.1);
+            width: 100%;
+            max-width: 800px;
+        }
+
+        .board-header {
+            text-align: center;
+            margin-bottom: 3rem;
+            border-bottom: 2px solid rgba(255,255,255,0.05);
+            padding-bottom: 1.5rem;
+        }
+
+        h1 {
+            font-family: var(--font-head);
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin: 0 0 0.5rem 0;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--accent-on);
+            text-shadow: 0 0 15px rgba(20, 184, 166, 0.4);
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-family: var(--font-head);
+            letter-spacing: 4px;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+        }
+
+        .modules {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2rem;
+        }
+
+        .module {
+            background: rgba(11, 13, 25, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 2rem 1.5rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);
+            position: relative;
+        }
+
+        /* Indicator Lights */
+        .light-bezel {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 4px rgba(255,255,255,0.1),
+                        inset 0 2px 4px rgba(0,0,0,0.8);
+        }
+
+        .light {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--accent-off);
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
+            transition: all 0.3s ease;
+        }
+
+        .module.active .light {
+            background: var(--accent-on);
+            box-shadow: 0 0 15px var(--accent-on), 
+                        0 0 30px var(--accent-on),
+                        inset 0 2px 5px rgba(255,255,255,0.6);
+        }
+        
+        .module.routing .light {
+            background: var(--accent-alert);
+            box-shadow: 0 0 15px var(--accent-alert), 
+                        0 0 30px var(--accent-alert),
+                        inset 0 2px 5px rgba(255,255,255,0.6);
+            animation: pulse 1s infinite alternate;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.7; transform: scale(0.95); }
+            100% { opacity: 1; transform: scale(1.05); }
+        }
+
+        /* Skeuomorphic Toggle Switch */
+        .toggle-switch {
+            width: 48px;
+            height: 80px;
+            background: #0b0d19;
+            border-radius: 24px;
+            position: relative;
+            cursor: pointer;
+            border: 2px solid rgba(255,255,255,0.05);
+            box-shadow: inset 0 4px 8px rgba(0,0,0,0.8),
+                        0 2px 0 rgba(255,255,255,0.1);
+        }
+
+        .toggle-knob {
+            width: 38px;
+            height: 38px;
+            background: linear-gradient(to bottom, #475569, #1e293b);
+            border-radius: 50%;
+            position: absolute;
+            left: 3px;
+            top: 4px;
+            transition: top 0.3s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.6),
+                        inset 0 2px 2px rgba(255,255,255,0.2);
+            border: 1px solid #0f172a;
+        }
+
+        .module.active .toggle-knob, .module.routing .toggle-knob {
+            top: 34px;
+            background: linear-gradient(to bottom, #94a3b8, #475569);
+            box-shadow: 0 -4px 6px rgba(0,0,0,0.6),
+                        inset 0 2px 2px rgba(255,255,255,0.4);
+        }
+
+        .label {
+            margin-top: 1.5rem;
+            font-family: var(--font-head);
+            font-size: 0.85rem;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+        
+        .status-text {
+            margin-top: 0.5rem;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            min-height: 1rem;
+        }
+        
+        .module.active .status-text { color: var(--accent-on); }
+        .module.routing .status-text { color: var(--accent-alert); }
+
+        .cord-panel {
+            margin-top: 3rem;
+            padding-top: 2rem;
+            border-top: 2px solid rgba(255,255,255,0.05);
+            display: flex;
+            justify-content: space-around;
+        }
+        
+        .jack {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #000;
+            border: 4px solid #334155;
+            box-shadow: inset 0 5px 10px rgba(0,0,0,1), 0 2px 0 rgba(255,255,255,0.1);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="switchboard">
+        <div class="board-header">
+            <h1>Charlotte</h1>
+            <div class="subtitle">Virtual Receptionist Array</div>
+        </div>
+
+        <div class="modules">
+            <!-- Module 1: Idle/Off -->
+            <div class="module" onclick="toggleModule(this)">
+                <div class="light-bezel">
+                    <div class="light"></div>
+                </div>
+                <div class="toggle-switch">
+                    <div class="toggle-knob"></div>
+                </div>
+                <div class="label">Line 01</div>
+                <div class="status-text">Standby</div>
+            </div>
+
+            <!-- Module 2: Active -->
+            <div class="module active" onclick="toggleModule(this)">
+                <div class="light-bezel">
+                    <div class="light"></div>
+                </div>
+                <div class="toggle-switch">
+                    <div class="toggle-knob"></div>
+                </div>
+                <div class="label">Line 02</div>
+                <div class="status-text">Listening</div>
+            </div>
+
+            <!-- Module 3: Routing (Alert) -->
+            <div class="module routing" onclick="toggleModule(this)">
+                <div class="light-bezel">
+                    <div class="light"></div>
+                </div>
+                <div class="toggle-switch">
+                    <div class="toggle-knob"></div>
+                </div>
+                <div class="label">Line 03</div>
+                <div class="status-text">Routing Call...</div>
+            </div>
+        </div>
+        
+        <div class="cord-panel">
+            <div class="jack"></div>
+            <div class="jack"></div>
+            <div class="jack"></div>
+            <div class="jack"></div>
+            <div class="jack"></div>
+        </div>
+    </div>
+
+    <script>
+        function toggleModule(el) {
+            if (el.classList.contains('active')) {
+                el.classList.remove('active');
+                el.classList.add('routing');
+                el.querySelector('.status-text').innerText = 'Routing Call...';
+            } else if (el.classList.contains('routing')) {
+                el.classList.remove('routing');
+                el.querySelector('.status-text').innerText = 'Standby';
+            } else {
+                el.classList.add('active');
+                el.querySelector('.status-text').innerText = 'Listening';
+            }
+        }
+    </script>
+</body>
+</html>

@@ -4,7 +4,7 @@ export class Tenant {
   readonly id: string;
   name: string;
   destinationNumber: string;
-  destinationVerified: boolean;
+  readonly destinationVerified: boolean;
   readonly createdAt: Date;
   updatedAt: Date;
 
@@ -38,7 +38,7 @@ export class Tenant {
 
   updateDestination(number: string, verified: boolean): void {
     this.destinationNumber = number;
-    this.destinationVerified = verified;
+    (this as { destinationVerified: boolean }).destinationVerified = verified;
     this.updatedAt = new Date();
   }
 
