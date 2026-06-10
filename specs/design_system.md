@@ -18,7 +18,7 @@ Charlotte is not a sterile enterprise machine; she is a friendly, supportive, an
 
 ### 1.2. Core Design Tokens (CSS Variables)
 
-Our core design tokens are codified in standard CSS variables inside [index.css](file:///Users/michaelbrown/Documents/Gemini/projects/Charlotte/frontend/src/index.css). They define our two central themes:
+Our core design tokens are codified in standard CSS variables inside [`frontend/src/index.css`](../frontend/src/index.css). They define our two central themes:
 
 | Token Category | Dark Mode (Default: "Deep Sky") | Light Mode ("Bright Office") | Usage |
 | :--- | :--- | :--- | :--- |

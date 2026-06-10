@@ -9,6 +9,8 @@ export class CallSession {
   callSid: string;
   streamSid: string | null;
   status: CallSessionStatus;
+  callerNumber: string;
+  messages: any[];
   readonly createdAt: Date;
   updatedAt: Date;
 
@@ -18,6 +20,8 @@ export class CallSession {
     callSid: string,
     streamSid: string | null,
     status: CallSessionStatus,
+    callerNumber: string,
+    messages: any[],
     createdAt: Date,
     updatedAt: Date
   ) {
@@ -26,11 +30,13 @@ export class CallSession {
     this.callSid = callSid;
     this.streamSid = streamSid;
     this.status = status;
+    this.callerNumber = callerNumber;
+    this.messages = messages;
     this.createdAt = createdAt;
     this.updatedAt = updatedAt;
   }
 
-  static create(tenant: Tenant, callSid: string): CallSession {
+  static create(tenant: Tenant, callSid: string, callerNumber: string = 'Unknown'): CallSession {
     const now = new Date();
     return new CallSession(
       uuidv4(),
@@ -38,6 +44,8 @@ export class CallSession {
       callSid,
       null,
       'initiated',
+      callerNumber,
+      [],
       now,
       now
     );
@@ -50,6 +58,14 @@ export class CallSession {
 
   updateStatus(status: CallSessionStatus): void {
     this.status = status;
+    this.updatedAt = new Date();
+  }
+
+  addMessage(msg: { id: string; speaker: 'charlotte' | 'caller'; text: string; timestamp?: string }): void {
+    if (!this.messages) {
+      this.messages = [];
+    }
+    this.messages.push(msg);
     this.updatedAt = new Date();
   }
 }

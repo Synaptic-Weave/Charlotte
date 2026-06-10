@@ -13,6 +13,7 @@ out/
 .env.development.local
 .env.test.local
 .env.production.local
+.env.production
 *.pem
 *.key
 
@@ -49,3 +50,10 @@ ehthumbs.db
 
 # Diagnostic files
 npm-debug.log*
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/tfplan.out
+tfplan.out

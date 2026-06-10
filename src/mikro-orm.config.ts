@@ -5,8 +5,11 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+const clientUrl = process.env.DATABASE_URL;
+if (!clientUrl) throw new Error('DATABASE_URL environment variable is required');
+
 export default defineConfig({
-  clientUrl: process.env.DATABASE_URL || 'postgresql://charlotte_admin:password@localhost:5432/charlotte_db?sslmode=disable',
+  clientUrl,
   entities: ['./dist/domain/schemas'],
   entitiesTs: ['./src/domain/schemas'],
   namingStrategy: UnderscoreNamingStrategy,

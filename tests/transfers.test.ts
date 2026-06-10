@@ -156,7 +156,7 @@ describe('Charlotte Warm Transfer & Call Bridging Integration Tests', () => {
 
     // 3. Seed active tenant with destination number
     testTenant = Tenant.create('Warm Transfer Test Tenant Ltd', '+15551234567');
-    testTenant.destinationVerified = true;
+    testTenant.updateDestination('+15551234567', true);
     testPhoneNumber = TwilioPhoneNumber.create(testTenant, '+15125550300', 'Transfer Test Line');
 
     await fork.persist([testTenant, testPhoneNumber]);
@@ -274,7 +274,7 @@ describe('Charlotte Warm Transfer & Call Bridging Integration Tests', () => {
     it('should return valid TwiML with <Gather> and speak department name', async () => {
       const response = await fetch(
         `${baseUrl}/api/webhook/twilio/transfer-whisper?inboundCallSid=CA_INBOUND_TRANSFER_123&department=Support&tenantId=${testTenant.id}`,
-        { method: 'POST' }
+        { method: 'POST', headers: { 'X-Twilio-Signature': 'mock' } }
       );
 
       expect(response.status).toBe(200);
@@ -295,7 +295,7 @@ describe('Charlotte Warm Transfer & Call Bridging Integration Tests', () => {
         `${baseUrl}/api/webhook/twilio/transfer-decision?inboundCallSid=CA_INBOUND_TRANSFER_123&department=Support&tenantId=${testTenant.id}`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'X-Twilio-Signature': 'mock', 'Content-Type': 'application/json' },
           body: JSON.stringify({ Digits: '1' }),
         }
       );
@@ -314,7 +314,7 @@ describe('Charlotte Warm Transfer & Call Bridging Integration Tests', () => {
         `${baseUrl}/api/webhook/twilio/transfer-decision?inboundCallSid=CA_INBOUND_TRANSFER_123&department=Support&tenantId=${testTenant.id}`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'X-Twilio-Signature': 'mock', 'Content-Type': 'application/json' },
           body: JSON.stringify({ Digits: '2' }),
         }
       );
@@ -338,7 +338,7 @@ describe('Charlotte Warm Transfer & Call Bridging Integration Tests', () => {
         `${baseUrl}/api/webhook/twilio/transfer-decision?inboundCallSid=CA_INBOUND_TRANSFER_123&department=Support&tenantId=${testTenant.id}&timeout=true`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'X-Twilio-Signature': 'mock', 'Content-Type': 'application/json' },
           body: JSON.stringify({}),
         }
       );
@@ -360,7 +360,7 @@ describe('Charlotte Warm Transfer & Call Bridging Integration Tests', () => {
         `${baseUrl}/api/webhook/twilio/voicemail-callback?inboundCallSid=CA_INBOUND_TRANSFER_123&tenantId=${testTenant.id}`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'X-Twilio-Signature': 'mock', 'Content-Type': 'application/json' },
           body: JSON.stringify({
             RecordingUrl: 'https://api.twilio.com/2010-04-01/Accounts/AC_test/Recordings/RE_12345',
             RecordingDuration: '15'

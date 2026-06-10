@@ -54,10 +54,20 @@ export const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
         body: JSON.stringify(body),
       });
 
-      const data = await response.json();
+      let data;
+      try {
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          data = await response.json();
+        } else {
+          throw new Error('Invalid response format');
+        }
+      } catch (parseError) {
+        throw new Error(`Server returned an invalid response (Status: ${response.status}). Please try again later or contact support.`);
+      }
 
       if (!response.ok) {
-        throw new Error(data.error || 'Authentication failed. Please verify your details.');
+        throw new Error(data?.error || 'Authentication failed. Please verify your details.');
       }
 
       setSuccessMsg(isLogin ? 'Login successful!' : 'Onboarding registration completed successfully!');
