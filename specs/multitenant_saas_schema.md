@@ -1,4 +1,5 @@
 # SaaS Multi-Tenant Domain Model & Twilio Provisioning Schema
+
 ## Domain Model Specification & Database Migration Design
 
 This document specifies the domain model, database schema, and migration scripts for the **Charlotte AI Virtual Receptionist** platform. It utilizes **Peter Coad's Five-Color Archetype System** to map SaaS multi-tenancy boundaries and the Twilio number provisioning workflow, ensuring strong data isolation, clear entity lifecycles, and low-latency transactional execution.
@@ -36,6 +37,7 @@ Peter Coad’s five color archetypes are applied to isolate core identities, cap
 ## 2. TypeScript Entity Definitions
 
 The domain entities are expressed in TypeScript. Following Coad's DDD patterns:
+
 - Constructors are **private** to enforce creation via static factory methods.
 - **Descriptors** act as factories for **Transactions**.
 - **Transactions** act as coordinators that emit **Events** and state changes.
@@ -594,7 +596,7 @@ export class CallEndedEvent {
 
 ## 3. Schema Mappings (CamelCase to snake_case)
 
-To persist the domain objects cleanly into a relational database, standard mapping is established. 
+To persist the domain objects cleanly into a relational database, standard mapping is established.
 
 | TS Class / Property | DB Table / Column | DB Data Type | Constraints / Key |
 | :--- | :--- | :--- | :--- |
@@ -625,7 +627,7 @@ To persist the domain objects cleanly into a relational database, standard mappi
 | `twilioAppSid` | `twilio_app_sid` | `VARCHAR(100)` | Nullable (used if `'TWILIO_MANAGED'`) |
 | `carrierName` | `carrier_name` | `VARCHAR(100)` | Nullable (used if `'BYON_SIP'`) |
 | `sipUri` | `sip_uri` | `VARCHAR(255)` | Nullable (used if `'BYON_SIP'`) |
-| `authCredentialsEncrypted`| `auth_credentials_encrypted`| `TEXT` | Nullable (used if `'BYON_SIP'`) |
+| `authCredentialsEncrypted` | `auth_credentials_encrypted` | `TEXT` | Nullable (used if `'BYON_SIP'`) |
 | **TwilioPhoneNumber** | `twilio_phone_numbers` | | |
 | `id` | `id` | `UUID` | Primary Key |
 | `tenantId` | `tenant_id` | `UUID` | Foreign Key (`tenants.id`), **Tenant Isolation Root** |
@@ -634,17 +636,17 @@ To persist the domain objects cleanly into a relational database, standard mappi
 | `status` | `status` | `VARCHAR(50)` | Check Constraint |
 | `capabilities` | `capabilities` | `JSONB` | Not Null (e.g., `{"voice": true, "sms": true}`) |
 | `routingConfigId` | `routing_config_id` | `UUID` | Foreign Key (`phone_number_routing_configs.id`) |
-| **NumberProvisioningSaga**| `number_provisioning_sagas`| | |
+| **NumberProvisioningSaga** | `number_provisioning_sagas` | | |
 | `id` | `id` | `UUID` | Primary Key |
 | `tenantId` | `tenant_id` | `UUID` | Foreign Key (`tenants.id`), **Tenant Isolation Root** |
 | `step` | `step` | `VARCHAR(50)` | Check Constraint |
 | `targetAreaCode` | `target_area_code` | `VARCHAR(10)` | Not Null |
-| `purchasedPhoneNumberId`| `purchased_phone_number_id`| `UUID` | Foreign Key (`twilio_phone_numbers.id`), Nullable |
+| `purchasedPhoneNumberId` | `purchased_phone_number_id` | `UUID` | Foreign Key (`twilio_phone_numbers.id`), Nullable |
 | `twilioErrorCode` | `twilio_error_code` | `VARCHAR(50)` | Nullable |
 | **CallSession** | `call_sessions` | | |
 | `id` | `id` | `UUID` | Primary Key |
 | `tenantId` | `tenant_id` | `UUID` | Foreign Key (`tenants.id`), **Tenant Isolation Root** |
-| `twilioPhoneNumberId` | `twilio_phone_number_id`| `UUID` | Foreign Key (`twilio_phone_numbers.id`) |
+| `twilioPhoneNumberId` | `twilio_phone_number_id` | `UUID` | Foreign Key (`twilio_phone_numbers.id`) |
 | `customerCallerId` | `customer_caller_id` | `UUID` | Foreign Key (`customer_callers.id`) |
 | `twilioCallSid` | `twilio_call_sid` | `VARCHAR(100)` | Unique Index, Not Null |
 | `status` | `status` | `VARCHAR(50)` | Check Constraint |
@@ -1222,6 +1224,7 @@ Charlotte employs a dual-layered data isolation strategy combining **database-le
 PostgreSQL natively supports RLS. It acts as an internal query rewriter. When RLS is enabled, every query targeting the table is transparently appended with filtering criteria before planning.
 
 #### 1. Enabling RLS
+
 Every tenant-owned table MUST explicitly have RLS enabled:
 
 ```sql
@@ -1243,6 +1246,7 @@ ALTER TABLE billing_charge_events ENABLE ROW LEVEL SECURITY;
 ```
 
 #### 2. Defining the Security Policy
+
 A single global tenant security parameter `app.current_tenant_id` is declared in the PostgreSQL session memory. RLS policies match the row's `tenant_id` against this session parameter:
 
 ```sql
@@ -1293,6 +1297,7 @@ CREATE POLICY tenant_isolation_policy ON billing_charge_events
 ```
 
 #### 3. Handling Global Bypass / Cross-Tenant System Level Jobs
+
 To allow background workers (e.g., cron jobs, global analytics) to bypass RLS, we do not disable the system's root roles. Instead, only specific service accounts or connection settings are granted access. Running database operations as a PostgreSQL `SUPERUSER` or applying `ALTER TABLE <name> FORCE ROW LEVEL SECURITY` handles this separation.
 
 ### 6.2. Application-Level Scoping: AsyncLocalStorage & Connection Wrapping
@@ -1300,6 +1305,7 @@ To allow background workers (e.g., cron jobs, global analytics) to bypass RLS, w
 To populate `app.current_tenant_id` reliably during request handling, Node's `AsyncLocalStorage` is utilized to pass context without threading parameters through every repository call.
 
 #### 1. Tenant Context Store
+
 ```typescript
 import { AsyncLocalStorage } from 'async_hooks';
 
@@ -1311,6 +1317,7 @@ export const tenantContextStore = new AsyncLocalStorage<TenantContext>();
 ```
 
 #### 2. Express Routing / Twilio Stream Middleware
+
 When a call arrives, the system resolves the tenant by looking up the incoming `to` number (obtained from Twilio's payload) or the current user's session. It then wraps subsequent execution in the storage scope:
 
 ```typescript
@@ -1355,6 +1362,7 @@ export async function tenantResolverMiddleware(req: Request, res: Response, next
 ```
 
 #### 3. Database Connection Pooling Wrapper
+
 Every checkout from the database pool sets the `app.current_tenant_id` state immediately inside a PostgreSQL transaction, ensuring RLS takes immediate effect:
 
 ```typescript

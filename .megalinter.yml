@@ -10,7 +10,7 @@ APPLY_FIXES: none
 PRINT_ALPACA: false
 
 # Exclude generated files, dev artifacts, and scratch utilities from all linters
-FILTER_REGEX_EXCLUDE: "(node_modules/|scratch/|coverage/|dist/|playwright-report/|test-results/|\\.git/|package-lock\\.json|frontend-scaffold/)"
+FILTER_REGEX_EXCLUDE: "(node_modules/|scratch/|coverage/|dist/|playwright-report/|test-results/|\\.git/|package-lock\\.json|frontend-scaffold/|\\.gemini/)"
 
 # ─── Explicit linter allowlist ────────────────────────────────────────────────
 # Only these linters run. Everything else (kics, trivy, grype, devskim,
