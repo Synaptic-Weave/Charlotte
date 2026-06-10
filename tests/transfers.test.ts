@@ -244,13 +244,13 @@ describe('Charlotte Warm Transfer & Call Bridging Integration Tests', () => {
       expect(storedCallbacks).toBeDefined();
       expect(storedCallbacks.onmessage).toBeDefined();
 
-      // Programmatically trigger a routeCall tool execution callback
+      // Programmatically trigger a transfer_call tool execution callback
       await storedCallbacks.onmessage({
         toolCall: {
           functionCalls: [
             {
               id: 'fn_route_123',
-              name: 'routeCall',
+              name: 'transfer_call',
               args: { department: 'Support' }
             }
           ]

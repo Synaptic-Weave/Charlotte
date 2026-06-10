@@ -9,6 +9,7 @@ export const DepartmentSchema = new EntitySchema<Department>({
     id: { type: 'uuid', primary: true },
     tenant: { kind: 'm:1', entity: () => 'Tenant', deleteRule: 'cascade' },
     name: { type: 'string' },
+    routingNumber: { type: 'string', nullable: true },
     createdAt: { type: 'Date' },
     updatedAt: { type: 'Date', onUpdate: () => new Date() },
   },
