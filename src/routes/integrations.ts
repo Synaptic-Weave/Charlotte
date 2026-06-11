@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { EntityManager } from '@mikro-orm/core';
 import { google } from 'googleapis';
 import { Tenant } from '../domain/entities/Tenant.js';
-import { requireAuth } from '../middleware/auth.js';
+import { authenticateToken } from '../middleware/auth.js';
 
 export function createIntegrationsRouter(em: EntityManager): Router {
   const router = Router();
@@ -15,13 +15,14 @@ export function createIntegrationsRouter(em: EntityManager): Router {
     );
   };
 
-  router.get('/google/auth', requireAuth, (req, res) => {
+  router.get('/google/auth', authenticateToken, (req, res) => {
+    const user = (req as any).user;
     const oauth2Client = getOauth2Client();
     const url = oauth2Client.generateAuthUrl({
       access_type: 'offline',
       prompt: 'consent',
       scope: ['https://www.googleapis.com/auth/calendar', 'https://www.googleapis.com/auth/calendar.events'],
-      state: req.user!.tenantId,
+      state: user!.tenantId,
     });
     res.json({ url });
   });
@@ -52,8 +53,9 @@ export function createIntegrationsRouter(em: EntityManager): Router {
     }
   });
 
-  router.get('/google/calendars', requireAuth, async (req, res) => {
-    const tenantId = req.user!.tenantId;
+  router.get('/google/calendars', authenticateToken, async (req, res) => {
+    const user = (req as any).user;
+    const tenantId = user!.tenantId;
     const tenant = await em.findOne(Tenant, { id: tenantId });
     if (!tenant || !tenant.googleRefreshToken) {
       return res.status(400).json({ error: 'Google Calendar not connected' });
@@ -70,9 +72,10 @@ export function createIntegrationsRouter(em: EntityManager): Router {
     }
   });
 
-  router.post('/google/calendars', requireAuth, async (req, res) => {
+  router.post('/google/calendars', authenticateToken, async (req, res) => {
     const { calendarId } = req.body;
-    const tenantId = req.user!.tenantId;
+    const user = (req as any).user;
+    const tenantId = user!.tenantId;
     
     if (!calendarId) return res.status(400).json({ error: 'Missing calendarId' });
     
