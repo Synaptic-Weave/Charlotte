@@ -9,7 +9,7 @@ import { authenticateToken } from '../middleware/auth.js';
 // Setup Twilio Client with optional credentials check
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
-const isTwilioConfigured = accountSid && authToken && accountSid.startsWith('AC') && !accountSid.startsWith('ACXX');
+const isTwilioConfigured = accountSid && authToken && accountSid.startsWith('AC') && !accountSid.startsWith('ACXX') && !accountSid.startsWith('AC000');
 const twilioClient = isTwilioConfigured ? twilio(accountSid as string, authToken as string) : null;
 
 export function createNumbersRouter(em: EntityManager): Router {
