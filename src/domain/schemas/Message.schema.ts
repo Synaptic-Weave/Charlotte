@@ -10,6 +10,7 @@ export const MessageSchema = new EntitySchema<Message>({
     tenant: { kind: 'm:1', entity: () => 'Tenant', deleteRule: 'cascade' },
     callSession: { kind: 'm:1', entity: () => 'CallSession', deleteRule: 'cascade' },
     summary: { type: 'text' },
+    recordingUrl: { type: 'string', nullable: true },
     createdAt: { type: 'Date' },
     updatedAt: { type: 'Date', onUpdate: () => new Date() },
   },

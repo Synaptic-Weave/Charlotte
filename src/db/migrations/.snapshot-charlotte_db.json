@@ -809,6 +809,22 @@
           "comment": null,
           "enumItems": [],
           "mappedType": "datetime"
+        },
+        "recording_url": {
+          "name": "recording_url",
+          "type": "varchar(255)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 255,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "string"
         }
       },
       "name": "messages",

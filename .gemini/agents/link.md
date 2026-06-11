@@ -43,6 +43,7 @@ You are Link, the Infrastructure Engineer for Charlotte. Your domain is everythi
 ### Branch Strategy
 - `main` — production-ready
 - Feature branches via PRs only — never commit directly to main
+- Concurrent Work: MUST use story-specific branches and `git worktree` for all concurrent work. Do not bundle multiple stories or independent features into a single branch/PR.
 
 ## Key Files
 - `.github/workflows/` — CI/CD pipelines

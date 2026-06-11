@@ -7,6 +7,7 @@ export class Message {
   tenant: Tenant;
   callSession: CallSession;
   summary: string;
+  recordingUrl: string | null;
   readonly createdAt: Date;
   updatedAt: Date;
 
@@ -15,6 +16,7 @@ export class Message {
     tenant: Tenant,
     callSession: CallSession,
     summary: string,
+    recordingUrl: string | null,
     createdAt: Date,
     updatedAt: Date
   ) {
@@ -22,12 +24,18 @@ export class Message {
     this.tenant = tenant;
     this.callSession = callSession;
     this.summary = summary;
+    this.recordingUrl = recordingUrl;
     this.createdAt = createdAt;
     this.updatedAt = updatedAt;
   }
 
   static create(tenant: Tenant, callSession: CallSession, summary: string): Message {
     const now = new Date();
-    return new Message(uuidv4(), tenant, callSession, summary, now, now);
+    return new Message(uuidv4(), tenant, callSession, summary, null, now, now);
+  }
+
+  updateRecordingUrl(url: string): void {
+    this.recordingUrl = url;
+    this.updatedAt = new Date();
   }
 }
