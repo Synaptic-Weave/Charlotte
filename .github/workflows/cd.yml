@@ -86,11 +86,11 @@ jobs:
 
       - name: Run Database Migrations
         run: |
-          gcloud run jobs update charlotte-db-migrate-uat \
+          gcloud run jobs update charlotte-db-migrate \
             --region ${{ env.REGION }} \
             --image ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
 
-          gcloud run jobs execute charlotte-db-migrate-uat \
+          gcloud run jobs execute charlotte-db-migrate \
             --region ${{ env.REGION }} \
             --wait
 
@@ -133,11 +133,11 @@ jobs:
 
       - name: Run Database Migrations
         run: |
-          gcloud run jobs update charlotte-db-migrate-prod \
+          gcloud run jobs update charlotte-db-migrate \
             --region ${{ env.REGION }} \
             --image ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
 
-          gcloud run jobs execute charlotte-db-migrate-prod \
+          gcloud run jobs execute charlotte-db-migrate \
             --region ${{ env.REGION }} \
             --wait
 
