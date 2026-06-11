@@ -21,7 +21,9 @@
     "docs/**",
     "playwright.config.ts",
     "vitest.config.ts",
-    "src/db/migrations/.snapshot-*.json"
+    "src/db/migrations/.snapshot-*.json",
+    "**/*.yml",
+    "**/*.yaml"
   ],
   "words": [
     "agentic",
