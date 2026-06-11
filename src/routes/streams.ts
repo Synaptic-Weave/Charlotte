@@ -88,7 +88,22 @@ export function registerStreamHandler(wss: WebSocketServer, em: EntityManager): 
       return;
     }
 
-    if (url.pathname !== '/api/streams') {
+    if (url.pathname === '/api/streams') {
+      const token = url.searchParams.get('token');
+      if (!token) {
+        console.log('[WebSocket Streams] Connection rejected: Missing token query parameter.');
+        ws.close(4001, 'Authentication token required');
+        return;
+      }
+      try {
+        const decoded = jwt.verify(token, JWT_SECRET) as jwt.JwtPayload;
+        // Proceed with connection
+      } catch (err) {
+        console.log('[WebSocket Streams] Connection rejected: Invalid token.', err);
+        ws.close(4002, 'Invalid authentication token');
+        return;
+      }
+    } else if (url.pathname !== '/api/streams') {
       console.log(`[WebSocket] Rejecting connection to path: ${url.pathname}`);
       ws.close(4004, 'Invalid streaming path');
       return;
@@ -128,9 +143,14 @@ export function registerStreamHandler(wss: WebSocketServer, em: EntityManager): 
             isResumed = customParams.resumed === "true";
             dialedNumber = customParams.dialedNumber;
 
-            if (!tenantId || !callSid || !streamSid) {
-              console.error('[Twilio Stream] Missing required custom parameters on start event.');
-              ws.close(4000, 'Missing start parameters');
+            if (typeof streamSid !== 'string' || typeof callSid !== 'string' || typeof tenantId !== 'string') {
+              console.error('[Twilio Stream] Missing or invalid custom parameters on start event.');
+              ws.close(4000, 'Missing or invalid start parameters');
+              return;
+            }
+            if (dialedNumber && typeof dialedNumber !== 'string') {
+              console.error('[Twilio Stream] Invalid dialedNumber parameter on start event.');
+              ws.close(4000, 'Invalid parameters');
               return;
             }
 

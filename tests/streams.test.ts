@@ -141,7 +141,11 @@ describe('Charlotte Telephony Inbound Call Webhook & WebSocket Media Stream Brid
     await new Promise<void>((resolve) => server.listen(0, () => resolve()));
     port = (server.address() as any).port;
     baseUrl = `http://localhost:${port}`;
-    wsUrl = `ws://localhost:${port}/api/streams`;
+    
+    // Generate valid JWT token for WebSocket authentication
+    const jwt = await import('jsonwebtoken');
+    const token = jwt.default.sign({ tenantId: testTenant.id }, process.env.JWT_SECRET || 'dev_secret_key_123');
+    wsUrl = `ws://localhost:${port}/api/streams?token=${token}`;
     console.log(`[Test Server] Live on ${baseUrl} & WebSocket on ${wsUrl}`);
   });
 

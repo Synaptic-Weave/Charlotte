@@ -4,6 +4,11 @@ import twilio from 'twilio';
 import { TwilioPhoneNumber } from '../domain/entities/TwilioPhoneNumber.js';
 import { CallSession } from '../domain/entities/CallSession.js';
 import { tenantLocalStorage, runInTenantTransaction } from '../db/context.js';
+import { CallSessionService } from '../services/CallSessionService.js';
+import jwt from 'jsonwebtoken';
+import { Message } from '../domain/entities/Message.js';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'charlotte_super_secret_jwt_sign_key_change_me_in_production';
 
 // Escape user-controlled strings before interpolating into TwiML XML
 function escapeXml(str: string): string {
@@ -26,7 +31,9 @@ const twilioClient = isTwilioConfigured ? twilio(apiKey as string, apiSecret as 
 const validateTwilio = (req: any, res: any, next: any) => {
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   if (!authToken) {
-    return next();
+    if (process.env.NODE_ENV === 'test') return next();
+    console.error('[Webhook] Validation failed: TWILIO_AUTH_TOKEN is not configured.');
+    return next(new Error('Server configuration error: TWILIO_AUTH_TOKEN missing.'));
   }
 
   const signature = req.headers['x-twilio-signature'] as string;
@@ -62,7 +69,7 @@ export function createWebhooksRouter(em: EntityManager): Router {
    * initializes the CallSession under active RLS context, and
    * returns TwiML containing the <Connect><Stream> verbs.
    */
-  router.post('/twilio/inbound-call', validateTwilio, async (req, res) => {
+  router.post('/twilio/inbound-call', validateTwilio, async (req, res, next) => {
     try {
       const { To: dialedNumber, CallSid: callSid, From: callerNumber } = req.body;
 
@@ -101,18 +108,8 @@ export function createWebhooksRouter(em: EntityManager): Router {
 
       // 2. Initialize CallSession in state "initiated" within the tenant context
       await tenantLocalStorage.run({ tenantId }, async () => {
-        await runInTenantTransaction(em, async (txEm) => {
-          // Check if session already exists
-          const existing = await txEm.findOne(CallSession, { callSid });
-          if (!existing) {
-            const callSession = CallSession.create(tenant, callSid, callerNumber || 'Unknown');
-            txEm.persist(callSession);
-            await txEm.flush();
-            console.log(`[Webhook] Created new CallSession in "initiated" status: ${callSession.id}`);
-          } else {
-            console.log(`[Webhook] CallSession already exists for CallSid: ${callSid}`);
-          }
-        });
+        const callSvc = new CallSessionService(em);
+        await callSvc.getOrCreateSession(callSid, callerNumber, tenant);
       });
 
       // 3. Build and return TwiML containing <Connect><Stream> verbs targeting /api/streams
@@ -120,16 +117,16 @@ export function createWebhooksRouter(em: EntityManager): Router {
       const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
       const wsProtocol = isSecure ? 'wss' : 'ws';
 
-      const streamUrl = `${wsProtocol}://${host}/api/streams`;
+      const streamUrl = `${wsProtocol}://${host}/api/streams?token=${jwt.sign({ tenantId }, JWT_SECRET, { expiresIn: '1h' })}`;
 
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Connect>
     <Stream url="${streamUrl}">
-      <Parameter name="tenantId" value="${tenantId}" />
-      <Parameter name="callSid" value="${callSid}" />
-      <Parameter name="dialedNumber" value="${dialedNumber}" />
-      <Parameter name="callerNumber" value="${callerNumber}" />
+      <Parameter name="tenantId" value="${escapeXml(tenantId)}" />
+      <Parameter name="callSid" value="${escapeXml(callSid)}" />
+      <Parameter name="dialedNumber" value="${escapeXml(dialedNumber)}" />
+      <Parameter name="callerNumber" value="${escapeXml(callerNumber)}" />
     </Stream>
   </Connect>
 </Response>`;
@@ -138,7 +135,7 @@ export function createWebhooksRouter(em: EntityManager): Router {
       res.send(twiml);
     } catch (error: any) {
       console.error('[Webhook] Error handling inbound call webhook:', error);
-      res.status(500).send('Internal server error occurred processing call.');
+      next(error);
     }
   });
 
@@ -146,16 +143,17 @@ export function createWebhooksRouter(em: EntityManager): Router {
    * POST /api/webhook/twilio/transfer-whisper
    * Webhook that plays a whisper/prompt to the destination owner, asking to accept/decline the call.
    */
-  router.post('/twilio/transfer-whisper', validateTwilio, async (req, res) => {
+  router.post('/twilio/transfer-whisper', validateTwilio, async (req, res, next) => {
     try {
-      const inboundCallSid = req.query.inboundCallSid as string;
+      const inboundCallSid = req.query.inboundCallSid;
+      if (typeof inboundCallSid !== 'string') {
+        res.status(400).send('Missing or invalid parameter: inboundCallSid');
+        return;
+      }
       const department = (req.query.department as string) || 'requested';
       const tenantId = req.query.tenantId as string;
 
-      if (!inboundCallSid) {
-        res.status(400).send('Missing required parameter: inboundCallSid');
-        return;
-      }
+
 
       console.log(`[Webhook] Transfer whisper prompt. InboundCallSid: ${inboundCallSid}, Department: ${department}, TenantId: ${tenantId}`);
 
@@ -182,17 +180,17 @@ export function createWebhooksRouter(em: EntityManager): Router {
 
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Gather action="/api/webhook/twilio/transfer-decision?inboundCallSid=${inboundCallSid}&amp;department=${encodeURIComponent(department)}&amp;tenantId=${tenantId}" numDigits="1" timeout="10">
+  <Gather action="/api/webhook/twilio/transfer-decision?inboundCallSid=${escapeXml(inboundCallSid)}&amp;department=${encodeURIComponent(department)}&amp;tenantId=${escapeXml(tenantId)}" numDigits="1" timeout="10">
     <Say voice="Polly.Joanna-Neural">${promptText}</Say>
   </Gather>
-  <Redirect>/api/webhook/twilio/transfer-decision?inboundCallSid=${inboundCallSid}&amp;department=${encodeURIComponent(department)}&amp;tenantId=${tenantId}&amp;timeout=true</Redirect>
+  <Redirect>/api/webhook/twilio/transfer-decision?inboundCallSid=${escapeXml(inboundCallSid)}&amp;department=${encodeURIComponent(department)}&amp;tenantId=${escapeXml(tenantId)}&amp;timeout=true</Redirect>
 </Response>`;
 
       res.type('text/xml');
       res.send(twiml);
     } catch (error: any) {
       console.error('[Webhook] Error in transfer-whisper:', error);
-      res.status(500).send('Internal server error processing transfer whisper.');
+      next(error);
     }
   });
 
@@ -200,18 +198,19 @@ export function createWebhooksRouter(em: EntityManager): Router {
    * POST /api/webhook/twilio/transfer-decision
    * Processes the owner's choice to accept or decline the call, and bridges or sends to voicemail.
    */
-  router.post('/twilio/transfer-decision', validateTwilio, async (req, res) => {
+  router.post('/twilio/transfer-decision', validateTwilio, async (req, res, next) => {
     try {
-      const inboundCallSid = req.query.inboundCallSid as string;
+      const inboundCallSid = req.query.inboundCallSid;
+      if (typeof inboundCallSid !== 'string') {
+        res.status(400).send('Missing or invalid parameter: inboundCallSid');
+        return;
+      }
       const timeout = req.query.timeout as string;
       const department = (req.query.department as string) || 'requested';
       const tenantId = req.query.tenantId as string;
       const digits = req.body.Digits as string;
 
-      if (!inboundCallSid) {
-        res.status(400).send('Missing required parameter: inboundCallSid');
-        return;
-      }
+
 
       console.log(`[Webhook] Transfer decision. InboundCallSid: ${inboundCallSid}, Digits: ${digits}, Timeout: ${timeout}, Department: ${department}, TenantId: ${tenantId}`);
 
@@ -221,7 +220,7 @@ export function createWebhooksRouter(em: EntityManager): Router {
 <Response>
   <Say voice="Polly.Joanna-Neural">Connecting you now.</Say>
   <Dial>
-    <Conference startConferenceOnEnter="true" endConferenceOnExit="true">Conf_${inboundCallSid}</Conference>
+    <Conference startConferenceOnEnter="true" endConferenceOnExit="true">Conf_${escapeXml(inboundCallSid)}</Conference>
   </Dial>
 </Response>`;
 
@@ -231,7 +230,7 @@ export function createWebhooksRouter(em: EntityManager): Router {
       }
 
       // Decline/timeout/any other key: send caller to conversational kickback, say goodbye to owner
-      const ownerTwiml = `<?xml version="1.0" encoding="UTF-8"?>
+      let ownerTwiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say voice="Polly.Joanna-Neural">Thank you. The caller will be reconnected to the assistant. Goodbye.</Say>
   <Hangup />
@@ -244,20 +243,20 @@ export function createWebhooksRouter(em: EntityManager): Router {
           const host = req.headers.host;
           const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
           const wsProtocol = isSecure ? 'wss' : 'ws';
-          const streamUrl = `${wsProtocol}://${host}/api/streams`;
+          const streamUrl = `${wsProtocol}://${host}/api/streams?token=${jwt.sign({ tenantId }, JWT_SECRET, { expiresIn: '1h' })}`;
 
           await twilioClient.calls(inboundCallSid).update({
             twiml: `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Connect>
     <Stream url="${streamUrl}">
-      <Parameter name="tenantId" value="${tenantId}" />
-      <Parameter name="callSid" value="${inboundCallSid}" />
+      <Parameter name="tenantId" value="${escapeXml(tenantId)}" />
+      <Parameter name="callSid" value="${escapeXml(inboundCallSid)}" />
       <Parameter name="resumed" value="true" />
     </Stream>
   </Connect>
   <Say voice="Polly.Joanna-Neural">We are experiencing technical difficulties. Please leave a standard message after the tone.</Say>
-  <Record action="/api/webhook/twilio/voicemail-fallback?inboundCallSid=${inboundCallSid}" maxLength="60" playBeep="true" />
+  <Record action="/api/webhook/twilio/voicemail-fallback?inboundCallSid=${escapeXml(inboundCallSid)}" maxLength="60" playBeep="true" />
 </Response>`
           });
           console.log(`[Twilio REST] Inbound call ${inboundCallSid} successfully redirected to AI stream.`);
@@ -266,13 +265,16 @@ export function createWebhooksRouter(em: EntityManager): Router {
         }
       } else {
         console.log(`[Twilio Mock] Redirecting inbound caller ${inboundCallSid} to AI stream (mock mode).`);
+        if (!twilioClient) {
+          ownerTwiml = `<?xml version="1.0" encoding="UTF-8"?>\n<Response>\n  <Say voice="Polly.Joanna-Neural">Thank you. The caller will be disconnected in mock mode. Goodbye.</Say>\n  <Hangup />\n</Response>`;
+        }
       }
 
       res.type('text/xml');
       res.send(ownerTwiml);
     } catch (error: any) {
       console.error('[Webhook] Error in transfer-decision:', error);
-      res.status(500).send('Internal server error processing transfer decision.');
+      next(error);
     }
   });
 
@@ -280,9 +282,13 @@ export function createWebhooksRouter(em: EntityManager): Router {
    * POST /api/webhook/twilio/voicemail-callback
    * Receives voicemail recording URL and persists it on the CallSession.
    */
-  router.post('/twilio/voicemail-callback', validateTwilio, async (req, res) => {
+  router.post('/twilio/voicemail-callback', validateTwilio, async (req, res, next) => {
     try {
-      const inboundCallSid = req.query.inboundCallSid as string;
+      const inboundCallSid = req.query.inboundCallSid;
+      if (typeof inboundCallSid !== 'string') {
+        res.status(400).send('Missing or invalid parameter: inboundCallSid');
+        return;
+      }
       const recordingUrl = req.body.RecordingUrl as string;
       const recordingDuration = req.body.RecordingDuration as string;
 
@@ -296,15 +302,9 @@ export function createWebhooksRouter(em: EntityManager): Router {
         if (callSession) {
           const tenantId = callSession.tenant.id;
           await tenantLocalStorage.run({ tenantId }, async () => {
-            await runInTenantTransaction(em, async (txEm) => {
-              const session = await txEm.findOne(CallSession, { callSid: inboundCallSid });
-              if (session) {
-                session.updateRecordingUrl(recordingUrl);
-                txEm.persist(session);
-                await txEm.flush();
-                console.log(`[Webhook] Persisted recording URL for CallSession ${session.id}.`);
-              }
-            });
+            const callSvc = new CallSessionService(em);
+            await callSvc.updateRecordingUrl(inboundCallSid as string, recordingUrl);
+            console.log(`[Webhook] Persisted recording URL for CallSession using CallSessionService.`);
           });
         } else {
           console.warn(`[Webhook] CallSession not found for CallSid: ${inboundCallSid}. Recording URL not persisted.`);
@@ -321,13 +321,17 @@ export function createWebhooksRouter(em: EntityManager): Router {
       res.send(twiml);
     } catch (error: any) {
       console.error('[Webhook] Error in voicemail-callback:', error);
-      res.status(500).send('Internal server error processing voicemail callback.');
+      next(error);
     }
   });
 
-  router.post('/twilio/voicemail-fallback', validateTwilio, async (req, res) => {
+  router.post('/twilio/voicemail-fallback', validateTwilio, async (req, res, next) => {
     try {
-      const inboundCallSid = req.query.inboundCallSid as string;
+      const inboundCallSid = req.query.inboundCallSid;
+      if (typeof inboundCallSid !== 'string') {
+        res.status(400).send('Missing or invalid parameter: inboundCallSid');
+        return;
+      }
       const recordingUrl = req.body.RecordingUrl as string;
 
       console.log(`[Webhook] Fallback voicemail received. CallSid: ${inboundCallSid}, URL: ${recordingUrl}`);
@@ -339,15 +343,9 @@ export function createWebhooksRouter(em: EntityManager): Router {
         if (callSession) {
           const tenantId = callSession.tenant.id;
           await tenantLocalStorage.run({ tenantId }, async () => {
-            await runInTenantTransaction(em, async (txEm) => {
-              const { Message } = await import('../domain/entities/Message.js');
-              // Create or update a message with the recordingUrl
-              const msgEntity = Message.create(callSession.tenant, callSession, 'Fallback standard voicemail recording');
-              msgEntity.updateRecordingUrl(recordingUrl);
-              txEm.persist(msgEntity);
-              await txEm.flush();
-              console.log(`[Webhook] Saved fallback recording URL to Message entity.`);
-            });
+            const callSvc = new CallSessionService(em);
+            await callSvc.saveFallbackVoicemail(inboundCallSid as string, recordingUrl);
+            console.log(`[Webhook] Saved fallback recording URL using CallSessionService.`);
           });
         }
       }
@@ -362,7 +360,7 @@ export function createWebhooksRouter(em: EntityManager): Router {
       res.send(twiml);
     } catch (error: any) {
       console.error('[Webhook] Error in voicemail-fallback:', error);
-      res.status(500).send('Internal server error processing voicemail fallback.');
+      next(error);
     }
   });
 
