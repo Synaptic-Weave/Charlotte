@@ -83,15 +83,18 @@
 ### Story 4: Tenant Google Workspace OAuth & Configuration
 
 **User Story**:
+
 - As a Tenant Admin,
 - I want to authenticate with my Google Workspace account and select a primary calendar,
 - So that the AI receptionist can access real-time availability and manage events.
 
 **Acceptance Criteria**:
+
 - **Given** an authenticated Tenant Admin, **When** they click "Connect Google Calendar", **Then** they are redirected to Google OAuth flow.
 - **Given** successful OAuth authentication, **When** returned to the dashboard, **Then** the `googleRefreshToken` is securely stored and they can select a calendar to save as `googleCalendarId`.
 
 **Engineering Scope & Implementation Guidelines**:
+
 - Update `Tenant` model in Mikro-ORM with `googleRefreshToken` and `googleCalendarId` (encrypted/secure).
 - Create `integrations.ts` router for OAuth and calendar listing using `googleapis`.
 - Frontend updates in `Integrations.tsx` to handle OAuth flow.
@@ -100,15 +103,18 @@
 ### Story 5: AI Availability Checking & Appointment Booking (Google Calendar)
 
 **User Story**:
+
 - As a Caller,
 - I want the AI to check real-time availability and schedule my appointments directly into the business's Google Calendar,
 - So that I can book precise timeslots without double-booking.
 
 **Acceptance Criteria**:
+
 - **Given** a connected Google Calendar, **When** the AI needs to check availability, **Then** it queries `list_calendar_events` and calculates free timeslots based on 60-min appointment duration and 15-min buffers.
 - **Given** an agreed upon timeslot, **When** the AI books the appointment, **Then** the `book_appointment` ADK tool successfully creates a Google Calendar event.
 
 **Engineering Scope & Implementation Guidelines**:
+
 - Update `streams.ts` ADK tools (`list_calendar_events`, `book_appointment`) to integrate with `googleapis` using the tenant's stored refresh token.
 - Enforce strict timeslot calculation rules (60 min duration + 15 min buffer).
 - Ensure 80% test coverage for conflict edge cases.
