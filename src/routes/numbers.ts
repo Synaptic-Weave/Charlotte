@@ -120,7 +120,9 @@ export function createNumbersRouter(em: EntityManager): Router {
         }
 
         // Programmatically buy the number on Twilio
-        const baseUrl = process.env.CHARLOTTE_API_BASE_URL || 'https://localhost:8080';
+        const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
+        const protocol = isSecure ? 'https' : 'http';
+        const baseUrl = process.env.CHARLOTTE_API_BASE_URL || `${protocol}://${req.headers.host}`;
         await twilioClient.incomingPhoneNumbers.create({
           phoneNumber,
           friendlyName: actualFriendlyName,
