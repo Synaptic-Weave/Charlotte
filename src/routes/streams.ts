@@ -468,7 +468,7 @@ Never tell the caller to call another number or try another way; always use the 
                                   await twilioClient.calls(callSid).update({
                                     twiml: `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="Polly.Joanna-Neural">Please hold for just a moment while I connect your call to the ${department} department.</Say>
+  <Say voice="Polly.Joanna-Neural">One moment while I connect you to ${department}.</Say>
   <Dial>
     <Conference waitUrl="${holdMusicUrl}" startConferenceOnEnter="false" endConferenceOnExit="true">Conf_${callSid}</Conference>
   </Dial>
