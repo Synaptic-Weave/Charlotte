@@ -67,7 +67,7 @@ resource "google_service_account_iam_member" "github_actions_impersonation" {
 # Cloud Run Job for DB Migrations
 # -------------------------------------------------------------------------
 resource "google_cloud_run_v2_job" "db_migrate" {
-  name     = "charlotte-db-migrate"
+  name     = "charlotte-db-migrate-${local.env}"
   location = var.region
   project  = var.project_id
 
@@ -76,7 +76,7 @@ resource "google_cloud_run_v2_job" "db_migrate" {
       service_account = google_service_account.backend_sa.email
 
       vpc_access {
-        connector = google_vpc_access_connector.connector.id
+        connector = "projects/${var.project_id}/locations/${var.region}/connectors/charlotte-vpc-conn"
         egress    = "PRIVATE_RANGES_ONLY"
       }
 
