@@ -635,8 +635,9 @@ Never tell the caller to call another number or try another way; always use the 
 
                 console.log('[Gemini] Connected to Live Voice API. Triggering initial greeting.');
                 try {
-                  await geminiSession.sendRealtimeInput({
-                    text: "Start the conversation with your greeting."
+                  await geminiSession.sendClientContent({
+                    turns: [{ role: 'user', parts: [{ text: "Start the conversation with your greeting." }] }],
+                    turnComplete: true
                   });
                 } catch (err) {
                   console.error('[Gemini] Failed to send initial greeting trigger:', err);
@@ -674,7 +675,7 @@ Never tell the caller to call another number or try another way; always use the 
               const geminiPayload = transcodeTwilioToGemini(base64MuLaw);
 
               await geminiSession.sendRealtimeInput({
-                audio: {
+                media: {
                   data: geminiPayload,
                   mimeType: 'audio/pcm;rate=16000',
                 },
