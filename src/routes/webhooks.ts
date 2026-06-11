@@ -18,8 +18,8 @@ function escapeXml(str: string): string {
 // Setup Twilio Client
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
-const isTwilioConfigured = accountSid && authToken && !accountSid.startsWith('ACXX');
-const twilioClient = isTwilioConfigured ? twilio(accountSid, authToken) : null;
+const isTwilioConfigured = accountSid && authToken && accountSid.startsWith('AC');
+const twilioClient = isTwilioConfigured ? twilio(accountSid as string, authToken as string) : null;
 
 // Setup Twilio webhook validator middleware
 const validateTwilio = (req: any, res: any, next: any) => {
