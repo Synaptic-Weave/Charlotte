@@ -6,6 +6,7 @@ import {
 import { TranscriptBox } from './TranscriptBox';
 import type { TranscriptMessage } from './TranscriptBox';
 import { NumberWizard } from './NumberWizard';
+import { Integrations } from './Integrations';
 
 interface TenantData {
   id: string;
@@ -868,6 +869,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
 
               </form>
             </div>
+
+            <div className="glass-card mt-6" style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              <Integrations token={token} />
+            </div>
+
           </div>
         )}
 
