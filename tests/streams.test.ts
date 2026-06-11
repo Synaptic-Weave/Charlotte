@@ -130,6 +130,12 @@ describe('Charlotte Telephony Inbound Call Webhook & WebSocket Media Stream Brid
 
     // Register Webhook endpoints
     app.use('/api/webhook', createWebhooksRouter(orm.em));
+    
+    // Add error handler to see why it fails
+    app.use((err: any, req: any, res: any, next: any) => {
+      console.error("EXPRESS ERROR IN TEST:", err);
+      res.status(500).json({ error: err.message, stack: err.stack });
+    });
 
     server = http.createServer(app);
     wss = new WebSocketServer({ server });
@@ -190,7 +196,7 @@ describe('Charlotte Telephony Inbound Call Webhook & WebSocket Media Stream Brid
         }),
       });
 
-      expect(response.status).toBe(200);
+      if(response.status !== 200) console.log(await response.text()); if(response.status !== 200) console.log(await response.text()); expect(response.status).toBe(200);
       expect(response.headers.get('content-type')).toContain('text/xml');
       const xml = await response.text();
       expect(xml).toContain('<Response>');
@@ -211,13 +217,14 @@ describe('Charlotte Telephony Inbound Call Webhook & WebSocket Media Stream Brid
       });
 
       // Assert Response Headers and XML Content
+      const xml = await response.text();
+      if (response.status !== 200) console.error("ERROR BODY:", xml);
       expect(response.status).toBe(200);
       expect(response.headers.get('content-type')).toContain('text/xml');
-      const xml = await response.text();
       
       expect(xml).toContain('<Response>');
       expect(xml).toContain('<Connect>');
-      expect(xml).toContain(`<Stream url="ws://localhost:${port}/api/streams">`);
+      expect(xml).toContain(`<Stream url="ws://localhost:${port}/api/streams?token=`);
       expect(xml).toContain(`<Parameter name="tenantId" value="${testTenant.id}" />`);
       expect(xml).toContain(`<Parameter name="callSid" value="${callSid}" />`);
 
@@ -234,15 +241,16 @@ describe('Charlotte Telephony Inbound Call Webhook & WebSocket Media Stream Brid
     it('should handle POST /api/webhook/twilio/transfer-whisper and return correct TwiML with Gather and Redirect', async () => {
       const response = await fetch(`${baseUrl}/api/webhook/twilio/transfer-whisper?inboundCallSid=CA_TRANSFER_123&department=Sales`, {
         method: 'POST',
+        headers: { 'X-Twilio-Signature': 'mock' }
       });
 
       expect(response.status).toBe(200);
       expect(response.headers.get('content-type')).toContain('text/xml');
       const xml = await response.text();
       expect(xml).toContain('<Response>');
-      expect(xml).toContain('<Gather action="/api/webhook/twilio/transfer-decision?inboundCallSid=CA_TRANSFER_123&amp;department=Sales&amp;tenantId=undefined"');
+      expect(xml).toContain('<Gather action="/api/webhook/twilio/transfer-decision?inboundCallSid=CA_TRANSFER_123&amp;department=Sales&amp;tenantId="');
       expect(xml).toContain('You have an incoming call from someone regarding an unknown purpose. Press 1 to accept this call, or press 2 to send it to voicemail.');
-      expect(xml).toContain('<Redirect>/api/webhook/twilio/transfer-decision?inboundCallSid=CA_TRANSFER_123&amp;department=Sales&amp;tenantId=undefined&amp;timeout=true</Redirect>');
+      expect(xml).toContain('<Redirect>/api/webhook/twilio/transfer-decision?inboundCallSid=CA_TRANSFER_123&amp;department=Sales&amp;tenantId=&amp;timeout=true</Redirect>');
     });
 
     it('should handle POST /api/webhook/twilio/transfer-decision with accept decision (Digits=1) and return connecting conference TwiML', async () => {
