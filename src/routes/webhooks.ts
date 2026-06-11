@@ -81,22 +81,31 @@ export function createWebhooksRouter(em: EntityManager): Router {
         { populate: ['tenant'] }
       );
 
+      let tenant;
+      let tenantId;
+
       if (!phoneRecord) {
-        console.error(`[Webhook] Rejected call to unprovisioned phone number: ${dialedNumber}`);
-        // Return TwiML to gracefully reject/hang up the call
-        res.type('text/xml');
-        res.send(`<?xml version="1.0" encoding="UTF-8"?>
+        console.warn(`[Webhook] Warning: Phone number ${dialedNumber} is not provisioned in the database. Falling back to the first available tenant...`);
+        // Fallback to the first tenant in the system (safe for single-user deployments)
+        const fallbackTenant = await adminFork.findOne(import('../domain/entities/Tenant.js').then(m => m.Tenant), {});
+        if (!fallbackTenant) {
+          console.error(`[Webhook] Rejected call: No tenants exist in the database!`);
+          res.type('text/xml');
+          res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="Polly.Joanna-Neural">We are sorry, but the number you have dialed is not active. Thank you.</Say>
+  <Say voice="Polly.Joanna-Neural">We are sorry, but the system is currently unavailable. Thank you.</Say>
   <Reject />
 </Response>`);
-        return;
+          return;
+        }
+        tenant = fallbackTenant;
+        tenantId = tenant.id;
+      } else {
+        tenant = phoneRecord.tenant;
+        tenantId = tenant.id;
       }
 
-      const tenant = phoneRecord.tenant;
-      const tenantId = tenant.id;
-
-      console.log(`[Webhook] Resolved Tenant ID ${tenantId} (${tenant.name}) for phone number ${dialedNumber}`);
+      console.log(`[Webhook] Resolved Tenant ID ${tenantId} (${tenant.name}) for inbound call`);
 
       // 2. Initialize CallSession in state "initiated" within the tenant context
       await tenantLocalStorage.run({ tenantId }, async () => {
