@@ -18,13 +18,12 @@ env:
 # yamllint enable rule:line-length
 
 jobs:
-  deploy:
-    name: Build and Deploy to Cloud Run
+  build:
+    name: Build and Push Images
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write  # Required for Workload Identity Federation
-
+      id-token: write
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -34,13 +33,10 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           project_id: ${{ env.PROJECT_ID }}
-          # Requires GCP_PROJECT_NUMBER to be set in GitHub repository secrets
-          # yamllint disable rule:line-length
           workload_identity_provider: >-
             projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider
           service_account: >-
             github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
-          # yamllint enable rule:line-length
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
@@ -65,27 +61,96 @@ jobs:
           docker push ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
           docker push ${{ env.FRONTEND_IMAGE }}:latest
 
+  deploy-uat:
+    name: Deploy to UAT
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    environment: UAT
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: >-
+            projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider
+          service_account: >-
+            github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
       - name: Run Database Migrations
         run: |
-          # Update the migration job with the new image, then execute it
-          gcloud run jobs update charlotte-db-migrate \
+          gcloud run jobs update charlotte-db-migrate-uat \
             --region ${{ env.REGION }} \
             --image ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
 
-          gcloud run jobs execute charlotte-db-migrate \
+          gcloud run jobs execute charlotte-db-migrate-uat \
             --region ${{ env.REGION }} \
             --wait
 
       - name: Deploy Backend to Cloud Run
         run: |
-          gcloud run deploy charlotte-backend \
+          gcloud run deploy charlotte-backend-uat \
             --image ${{ env.BACKEND_IMAGE }}:${{ github.sha }} \
             --region ${{ env.REGION }} \
             --quiet
 
       - name: Deploy Frontend to Cloud Run
         run: |
-          gcloud run deploy charlotte-frontend \
+          gcloud run deploy charlotte-frontend-uat \
+            --image ${{ env.FRONTEND_IMAGE }}:${{ github.sha }} \
+            --region ${{ env.REGION }} \
+            --quiet
+
+  deploy-prod:
+    name: Deploy to Production
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    environment: Production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: >-
+            projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider
+          service_account: >-
+            github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Run Database Migrations
+        run: |
+          gcloud run jobs update charlotte-db-migrate-prod \
+            --region ${{ env.REGION }} \
+            --image ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+
+          gcloud run jobs execute charlotte-db-migrate-prod \
+            --region ${{ env.REGION }} \
+            --wait
+
+      - name: Deploy Backend to Cloud Run
+        run: |
+          gcloud run deploy charlotte-backend-prod \
+            --image ${{ env.BACKEND_IMAGE }}:${{ github.sha }} \
+            --region ${{ env.REGION }} \
+            --quiet
+
+      - name: Deploy Frontend to Cloud Run
+        run: |
+          gcloud run deploy charlotte-frontend-prod \
             --image ${{ env.FRONTEND_IMAGE }}:${{ github.sha }} \
             --region ${{ env.REGION }} \
             --quiet
