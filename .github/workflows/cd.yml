@@ -1,0 +1,91 @@
+---
+name: Continuous Deployment
+
+"on":
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# yamllint disable rule:line-length
+env:
+  PROJECT_ID: charlotte-sw
+  REGION: us-central1
+  BACKEND_IMAGE: >-
+    us-central1-docker.pkg.dev/charlotte-sw/charlotte-repo/charlotte-backend
+  FRONTEND_IMAGE: >-
+    us-central1-docker.pkg.dev/charlotte-sw/charlotte-repo/charlotte-frontend
+# yamllint enable rule:line-length
+
+jobs:
+  deploy:
+    name: Build and Deploy to Cloud Run
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # Required for Workload Identity Federation
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          # Requires GCP_PROJECT_NUMBER to be set in GitHub repository secrets
+          # yamllint disable rule:line-length
+          workload_identity_provider: >-
+            projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider
+          service_account: >-
+            github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
+          # yamllint enable rule:line-length
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
+
+      - name: Build and Push Backend Image
+        run: |
+          docker build \
+            -t ${{ env.BACKEND_IMAGE }}:${{ github.sha }} \
+            -t ${{ env.BACKEND_IMAGE }}:latest .
+          docker push ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+          docker push ${{ env.BACKEND_IMAGE }}:latest
+
+      - name: Build and Push Frontend Image
+        working-directory: ./frontend
+        run: |
+          docker build \
+            -t ${{ env.FRONTEND_IMAGE }}:${{ github.sha }} \
+            -t ${{ env.FRONTEND_IMAGE }}:latest .
+          docker push ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+          docker push ${{ env.FRONTEND_IMAGE }}:latest
+
+      - name: Run Database Migrations
+        run: |
+          # Update the migration job with the new image, then execute it
+          gcloud run jobs update charlotte-db-migrate \
+            --region ${{ env.REGION }} \
+            --image ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+
+          gcloud run jobs execute charlotte-db-migrate \
+            --region ${{ env.REGION }} \
+            --wait
+
+      - name: Deploy Backend to Cloud Run
+        run: |
+          gcloud run deploy charlotte-backend \
+            --image ${{ env.BACKEND_IMAGE }}:${{ github.sha }} \
+            --region ${{ env.REGION }} \
+            --quiet
+
+      - name: Deploy Frontend to Cloud Run
+        run: |
+          gcloud run deploy charlotte-frontend \
+            --image ${{ env.FRONTEND_IMAGE }}:${{ github.sha }} \
+            --region ${{ env.REGION }} \
+            --quiet
