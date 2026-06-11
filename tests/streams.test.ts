@@ -176,7 +176,7 @@ describe('Charlotte Telephony Inbound Call Webhook & WebSocket Media Stream Brid
       expect(text).toContain('Missing required Twilio webhook parameters');
     });
 
-    it('should return a friendly hangup TwiML XML block if phone number is not found/provisioned', async () => {
+    it('should fallback to the first tenant if phone number is not found/provisioned', async () => {
       const response = await fetch(`${baseUrl}/api/webhook/twilio/inbound-call`, {
         method: 'POST',
         headers: { 'X-Twilio-Signature': 'mock', 'Content-Type': 'application/json' },
@@ -190,9 +190,8 @@ describe('Charlotte Telephony Inbound Call Webhook & WebSocket Media Stream Brid
       expect(response.headers.get('content-type')).toContain('text/xml');
       const xml = await response.text();
       expect(xml).toContain('<Response>');
-      expect(xml).toContain('<Say');
-      expect(xml).toContain('We are sorry, but the number you have dialed is not active.');
-      expect(xml).toContain('<Reject />');
+      expect(xml).toContain('<Connect>');
+      expect(xml).toContain('<Stream url=');
     });
 
     it('should successfully resolve tenant, save CallSession with state "initiated", and return valid TwiML with Connect Stream verbs', async () => {

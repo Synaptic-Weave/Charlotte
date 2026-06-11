@@ -88,7 +88,8 @@ export function createWebhooksRouter(em: EntityManager): Router {
       if (!phoneRecord) {
         console.warn(`[Webhook] Warning: Phone number ${dialedNumber} is not provisioned in the database. Falling back to the first available tenant...`);
         // Fallback to the first tenant in the system (safe for single-user deployments)
-        const fallbackTenant = await adminFork.findOne(Tenant, {});
+        const tenants = await adminFork.find(Tenant, {}, { limit: 1 });
+        const fallbackTenant = tenants[0];
         if (!fallbackTenant) {
           console.error(`[Webhook] Rejected call: No tenants exist in the database!`);
           res.type('text/xml');
