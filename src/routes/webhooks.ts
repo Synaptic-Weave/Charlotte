@@ -182,10 +182,10 @@ export function createWebhooksRouter(em: EntityManager): Router {
 
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Gather action="/api/webhook/twilio/transfer-decision?inboundCallSid=${inboundCallSid}&amp;department=${encodeURIComponent(department)}" numDigits="1" timeout="10">
+  <Gather action="/api/webhook/twilio/transfer-decision?inboundCallSid=${inboundCallSid}&amp;department=${encodeURIComponent(department)}&amp;tenantId=${tenantId}" numDigits="1" timeout="10">
     <Say voice="Polly.Joanna-Neural">${promptText}</Say>
   </Gather>
-  <Redirect>/api/webhook/twilio/transfer-decision?inboundCallSid=${inboundCallSid}&amp;department=${encodeURIComponent(department)}&amp;timeout=true</Redirect>
+  <Redirect>/api/webhook/twilio/transfer-decision?inboundCallSid=${inboundCallSid}&amp;department=${encodeURIComponent(department)}&amp;tenantId=${tenantId}&amp;timeout=true</Redirect>
 </Response>`;
 
       res.type('text/xml');
@@ -205,6 +205,7 @@ export function createWebhooksRouter(em: EntityManager): Router {
       const inboundCallSid = req.query.inboundCallSid as string;
       const timeout = req.query.timeout as string;
       const department = (req.query.department as string) || 'requested';
+      const tenantId = req.query.tenantId as string;
       const digits = req.body.Digits as string;
 
       if (!inboundCallSid) {
@@ -212,7 +213,7 @@ export function createWebhooksRouter(em: EntityManager): Router {
         return;
       }
 
-      console.log(`[Webhook] Transfer decision. InboundCallSid: ${inboundCallSid}, Digits: ${digits}, Timeout: ${timeout}, Department: ${department}`);
+      console.log(`[Webhook] Transfer decision. InboundCallSid: ${inboundCallSid}, Digits: ${digits}, Timeout: ${timeout}, Department: ${department}, TenantId: ${tenantId}`);
 
       if (digits === '1' && timeout !== 'true') {
         // Accept: join owner to the conference room
@@ -229,29 +230,40 @@ export function createWebhooksRouter(em: EntityManager): Router {
         return;
       }
 
-      // Decline/timeout/any other key: send caller to voicemail, say goodbye to owner
+      // Decline/timeout/any other key: send caller to conversational kickback, say goodbye to owner
       const ownerTwiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="Polly.Joanna-Neural">Thank you. The caller will be sent to voicemail. Goodbye.</Say>
+  <Say voice="Polly.Joanna-Neural">Thank you. The caller will be reconnected to the assistant. Goodbye.</Say>
   <Hangup />
 </Response>`;
 
-      if (twilioClient) {
+      if (twilioClient && tenantId) {
         try {
-          console.log(`[Twilio REST] Redirecting inbound caller ${inboundCallSid} to voicemail prompt...`);
+          console.log(`[Twilio REST] Redirecting inbound caller ${inboundCallSid} back to AI for conversational message...`);
+          
+          const host = req.headers.host;
+          const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
+          const wsProtocol = isSecure ? 'wss' : 'ws';
+          const streamUrl = `${wsProtocol}://${host}/api/streams`;
+
           await twilioClient.calls(inboundCallSid).update({
             twiml: `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="Polly.Joanna-Neural">I'm sorry, but no one is available in the ${escapeXml(department)} department right now. Please leave a message after the tone.</Say>
-  <Record action="/api/webhook/twilio/voicemail-callback?inboundCallSid=${inboundCallSid}" maxLength="60" playBeep="true" />
+  <Connect>
+    <Stream url="${streamUrl}">
+      <Parameter name="tenantId" value="${tenantId}" />
+      <Parameter name="callSid" value="${inboundCallSid}" />
+      <Parameter name="resumed" value="true" />
+    </Stream>
+  </Connect>
 </Response>`
           });
-          console.log(`[Twilio REST] Inbound call ${inboundCallSid} successfully redirected to voicemail.`);
+          console.log(`[Twilio REST] Inbound call ${inboundCallSid} successfully redirected to AI stream.`);
         } catch (err: any) {
-          console.error(`[Twilio REST] Failed to redirect inbound call ${inboundCallSid} to voicemail:`, err);
+          console.error(`[Twilio REST] Failed to redirect inbound call ${inboundCallSid} to AI:`, err);
         }
       } else {
-        console.log(`[Twilio Mock] Redirecting inbound caller ${inboundCallSid} to voicemail prompt (mock mode).`);
+        console.log(`[Twilio Mock] Redirecting inbound caller ${inboundCallSid} to AI stream (mock mode).`);
       }
 
       res.type('text/xml');

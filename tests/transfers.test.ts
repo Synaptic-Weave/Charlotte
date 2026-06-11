@@ -331,8 +331,9 @@ describe('Charlotte Warm Transfer & Call Bridging Integration Tests', () => {
       // Assert inbound caller leg redirected programmatically to voicemail callback
       expect(mockCallsUpdate).toHaveBeenCalled();
       const updateArgs = mockCallsUpdate.mock.calls[0][0];
-      expect(updateArgs.twiml).toContain('<Record');
-      expect(updateArgs.twiml).toContain('/api/webhook/twilio/voicemail-callback');
+      expect(updateArgs.twiml).toContain('<Connect>');
+      expect(updateArgs.twiml).toContain('<Stream');
+      expect(updateArgs.twiml).toContain('resumed');
     });
 
     it('should behave identically to decline on timeout/other inputs', async () => {
@@ -354,7 +355,9 @@ describe('Charlotte Warm Transfer & Call Bridging Integration Tests', () => {
 
       expect(mockCallsUpdate).toHaveBeenCalled();
       const updateArgs = mockCallsUpdate.mock.calls[0][0];
-      expect(updateArgs.twiml).toContain('<Record');
+      expect(updateArgs.twiml).toContain('<Connect>');
+      expect(updateArgs.twiml).toContain('<Stream');
+      expect(updateArgs.twiml).toContain('resumed');
     });
   });
 

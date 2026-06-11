@@ -104,6 +104,8 @@ export function registerStreamHandler(wss: WebSocketServer, em: EntityManager): 
     let dialedNumber: string | null = null;
     let leftoverSamples: Int16Array = new Int16Array(0);
     let outboundTransferCallSid: string | null = null;
+    let isResumed = false;
+    let callerNameForResume = "someone";
 
     ws.on('message', async (message: RawData) => {
       try {
@@ -123,6 +125,7 @@ export function registerStreamHandler(wss: WebSocketServer, em: EntityManager): 
             // Resolve custom parameters containing tenantId passed via TwiML
             const customParams = msg.start.customParameters || {};
             tenantId = customParams.tenantId;
+            isResumed = customParams.resumed === "true";
             dialedNumber = customParams.dialedNumber;
 
             if (!tenantId || !callSid || !streamSid) {
@@ -156,16 +159,19 @@ export function registerStreamHandler(wss: WebSocketServer, em: EntityManager): 
                 if (callSession) {
                   callSession.updateStreamSid(streamSid!);
                   callSession.updateStatus('active');
+                  callerNameForResume = callSession.callerName || 'someone';
 
-                  // Manually append the welcome greeting to the database transcript immediately
-                  const greetingText = `Hello, thanks for calling ${activeTenant.name}, how can I assist you?`;
-                  const greetingMsg = {
-                    id: `msg-greet-${Date.now()}`,
-                    speaker: 'charlotte' as const,
-                    text: greetingText,
-                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-                  };
-                  callSession.addMessage(greetingMsg);
+                  if (!isResumed) {
+                    // Manually append the welcome greeting to the database transcript immediately
+                    const greetingText = `Hello, thanks for calling ${activeTenant.name}, how can I assist you?`;
+                    const greetingMsg = {
+                      id: `msg-greet-${Date.now()}`,
+                      speaker: 'charlotte' as const,
+                      text: greetingText,
+                      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                    };
+                    callSession.addMessage(greetingMsg);
+                  }
 
                   txEm.persist(callSession);
                   await txEm.flush();
@@ -250,6 +256,20 @@ Never tell the caller to call another number or try another way; always use the 
                                 },
                               },
                               required: ['name'],
+                            },
+                          },
+                          {
+                            name: 'save_message',
+                            description: 'Save a conversational message from the caller if a transfer fails or they want to leave a message.',
+                            parameters: {
+                              type: 'OBJECT' as any,
+                              properties: {
+                                summary: {
+                                  type: 'STRING' as any,
+                                  description: 'The summary or content of the message to save.',
+                                },
+                              },
+                              required: ['summary'],
                             },
                           },
                           {
@@ -608,6 +628,40 @@ Never tell the caller to call another number or try another way; always use the 
                                   },
                                 ],
                               });
+                            } else if (fn.name === 'save_message') {
+                              const { summary } = fn.args as { summary: string };
+                              console.log(`[Tool Call] Model triggered save_message with summary: ${summary}`);
+                              
+                              let saveResponse = 'Failed to save message.';
+                              try {
+                                await tenantLocalStorage.run({ tenantId: tenantId! }, async () => {
+                                  await runInTenantTransaction(em, async (txEm) => {
+                                    const callSession = await txEm.findOne(CallSession, { callSid });
+                                    if (callSession && activeTenant) {
+                                      const { Message } = await import('../domain/entities/Message.js');
+                                      const msgEntity = Message.create(activeTenant, callSession, summary);
+                                      txEm.persist(msgEntity);
+                                      await txEm.flush();
+                                      saveResponse = 'Message successfully saved. You can let the user know and then say goodbye.';
+                                    }
+                                  });
+                                });
+                              } catch (err) {
+                                console.error('[Tool Call] Error saving message:', err);
+                              }
+
+                              await geminiSession.sendToolResponse({
+                                functionResponses: [
+                                  {
+                                    name: 'save_message',
+                                    id: fn.id,
+                                    response: {
+                                      status: 'success',
+                                      message: saveResponse,
+                                    },
+                                  },
+                                ],
+                              });
                             } else if (fn.name === 'book_appointment') {
                               const { customerId, departmentName, dateString } = fn.args;
                               console.log(`[Tool Call] Model triggered book_appointment for: ${customerId}, ${departmentName}, ${dateString}`);
@@ -655,8 +709,11 @@ Never tell the caller to call another number or try another way; always use the 
 
                 console.log('[Gemini] Connected to Live Voice API. Triggering initial greeting.');
                 try {
+                  const initialPrompt = isResumed 
+                    ? `The transfer failed. The caller's name is ${callerNameForResume}. Immediately apologize, tell them no one is available, and ask if you can take a message. Do not wait for them to speak first.`
+                    : "Start the conversation with your greeting.";
                   await geminiSession.sendRealtimeInput({
-                    text: "Start the conversation with your greeting."
+                    text: initialPrompt
                   });
                 } catch (err) {
                   console.error('[Gemini] Failed to send initial greeting trigger:', err);
