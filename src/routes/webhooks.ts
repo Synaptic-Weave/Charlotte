@@ -3,6 +3,7 @@ import { EntityManager } from '@mikro-orm/postgresql';
 import twilio from 'twilio';
 import { TwilioPhoneNumber } from '../domain/entities/TwilioPhoneNumber.js';
 import { CallSession } from '../domain/entities/CallSession.js';
+import { Tenant } from '../domain/entities/Tenant.js';
 import { tenantLocalStorage, runInTenantTransaction } from '../db/context.js';
 
 // Escape user-controlled strings before interpolating into TwiML XML
@@ -87,7 +88,7 @@ export function createWebhooksRouter(em: EntityManager): Router {
       if (!phoneRecord) {
         console.warn(`[Webhook] Warning: Phone number ${dialedNumber} is not provisioned in the database. Falling back to the first available tenant...`);
         // Fallback to the first tenant in the system (safe for single-user deployments)
-        const fallbackTenant = await adminFork.findOne(import('../domain/entities/Tenant.js').then(m => m.Tenant), {});
+        const fallbackTenant = await adminFork.findOne(Tenant, {});
         if (!fallbackTenant) {
           console.error(`[Webhook] Rejected call: No tenants exist in the database!`);
           res.type('text/xml');
