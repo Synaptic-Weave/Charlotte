@@ -388,6 +388,32 @@ describe('Charlotte API Routes and Authentication Middleware Integration Tests',
         expect(data.token).toBeDefined();
         expect(data.tenant.id).toBe(seededTenant.id);
         expect(data.tenant.name).toBe('Routes Integration Tenant Ltd');
+
+        // Check JWT payload structure
+        const decoded = jwt.decode(data.token) as any;
+        expect(decoded).toBeDefined();
+        expect(decoded.userId).toBe(seededUser.id);
+        expect(decoded.tenantId).toBe(seededTenant.id);
+      });
+    });
+
+    describe('GET /api/auth/settings', () => {
+      it('should return 401 if unauthenticated', async () => {
+        const response = await fetch(`${baseUrl}/api/auth/settings`, {
+          method: 'GET',
+        });
+        expect(response.status).toBe(401);
+      });
+
+      it('should return settings if authenticated', async () => {
+        const response = await fetch(`${baseUrl}/api/auth/settings`, {
+          method: 'GET',
+          headers: { 'Authorization': `Bearer ${adminToken}` },
+        });
+        expect(response.status).toBe(200);
+        const data = await response.json();
+        expect(data.tenant).toBeDefined();
+        expect(data.user).toBeDefined();
       });
     });
 
@@ -574,6 +600,31 @@ describe('Charlotte API Routes and Authentication Middleware Integration Tests',
         const matches = data.numbers.filter((num: any) => num.phoneNumber === '+15125559000');
         expect(matches.length).toBe(1);
         expect(matches[0].friendlyName).toBe('Acme Test Desk Line');
+      });
+
+      it('should return ONLY the requesting tenant\'s phone numbers and isolate cross-tenant data', async () => {
+        const fork = orm.em.fork();
+        
+        // Create Tenant B
+        const tenantB = Tenant.create('Tenant B isolation test', '+15550002222');
+        const twilioPhoneB = TwilioPhoneNumber.create(tenantB, '+15550003333', 'Tenant B Line');
+        fork.persist([tenantB, twilioPhoneB]);
+        await fork.flush();
+
+        const response = await fetch(`${baseUrl}/api/tenants/numbers/`, {
+          method: 'GET',
+          headers: { 'Authorization': `Bearer ${adminToken}` }, // AdminToken is Tenant A
+        });
+
+        expect(response.status).toBe(200);
+        const data = await response.json();
+        
+        // Assert Tenant A only sees their numbers, not Tenant B's
+        const matchB = data.numbers.filter((num: any) => num.phoneNumber === '+15550003333');
+        expect(matchB.length).toBe(0);
+
+        // Cleanup Tenant B
+        await fork.nativeDelete(Tenant, { id: tenantB.id });
       });
     });
   });
