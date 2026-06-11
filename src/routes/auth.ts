@@ -194,6 +194,41 @@ export function createAuthRouter(em: EntityManager): Router {
   });
 
   /**
+   * GET /api/auth/settings
+   * Retrieve Tenant and User configurations
+   */
+  router.get('/settings', authenticateToken, async (req, res) => {
+    try {
+      const result = await runInTenantTransaction(em, async (txEm) => {
+        const tenantId = req.context?.tenantId;
+        const tenant = await txEm.findOne<Tenant>(Tenant, { id: tenantId } as any);
+        if (!tenant) throw new Error('Tenant not found.');
+        
+        const userId = req.context?.userId;
+        const user = await txEm.findOne<User>(User, { id: userId } as any);
+        return { tenant, user };
+      });
+
+      res.status(200).json({
+        tenant: {
+          id: result.tenant.id,
+          name: result.tenant.name,
+          destinationNumber: result.tenant.destinationNumber,
+          destinationVerified: result.tenant.destinationVerified
+        },
+        user: result.user ? {
+          id: result.user.id,
+          email: result.user.email,
+          role: result.user.role
+        } : null
+      });
+    } catch (error: any) {
+      console.error('Error fetching tenant settings:', error);
+      res.status(500).json({ error: error.message || 'Internal server error occurred.' });
+    }
+  });
+
+  /**
    * PUT /api/auth/settings
    * Update Tenant configurations (name, destinationNumber)
    */
