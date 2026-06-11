@@ -7,6 +7,8 @@ export class Tenant {
   readonly destinationVerified: boolean;
   readonly createdAt: Date;
   updatedAt: Date;
+  googleRefreshToken?: string;
+  googleCalendarId?: string;
 
   private constructor(
     id: string,
