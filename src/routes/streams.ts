@@ -262,8 +262,26 @@ Never tell the caller to call another number or try another way; always use the 
                                 },
                               },
                               required: ['customerId', 'departmentName', 'dateString'],
+                        },
+                      },
+                      {
+                        name: 'list_calendar_events',
+                        description: 'List upcoming events from the Google Calendar to find free timeslots. Appointments are 60 minutes long, with a 15 minute buffer.',
+                        parameters: {
+                          type: 'OBJECT' as any,
+                          properties: {
+                            timeMin: {
+                              type: 'STRING' as any,
+                              description: 'The start date and time in ISO 8601 format.',
+                            },
+                            timeMax: {
+                              type: 'STRING' as any,
+                              description: 'The end date and time in ISO 8601 format.',
                             },
                           },
+                          required: ['timeMin', 'timeMax'],
+                        },
+                      },
                         ],
                       },
                     ],
@@ -523,6 +541,50 @@ Never tell the caller to call another number or try another way; always use the 
                                       status: 'success',
                                       message: crmResponse,
                                     },
+                                  },
+                                ],
+                              });
+                            } else if (fn.name === 'list_calendar_events') {
+                              const { timeMin, timeMax } = fn.args;
+                              console.log(`[Tool Call] Model triggered list_calendar_events: ${timeMin} to ${timeMax}`);
+                              let calResponse = '';
+                              try {
+                                const tenant = await em.findOne(Tenant, { id: tenantId });
+                                if (tenant && tenant.googleRefreshToken && tenant.googleCalendarId) {
+                                  const { google } = await import('googleapis');
+                                  const oauth2Client = new google.auth.OAuth2(
+                                    process.env.GOOGLE_CLIENT_ID || 'mock_client_id',
+                                    process.env.GOOGLE_CLIENT_SECRET || 'mock_client_secret'
+                                  );
+                                  oauth2Client.setCredentials({ refresh_token: tenant.googleRefreshToken });
+                                  const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+                                  const response = await calendar.events.list({
+                                    calendarId: tenant.googleCalendarId,
+                                    timeMin,
+                                    timeMax,
+                                    singleEvents: true,
+                                    orderBy: 'startTime',
+                                  });
+                                  const events = response.data.items || [];
+                                  calResponse = JSON.stringify(events.map(e => ({
+                                    start: e.start?.dateTime || e.start?.date,
+                                    end: e.end?.dateTime || e.end?.date,
+                                    summary: 'Busy' // Hide real summary for privacy
+                                  })));
+                                } else {
+                                  calResponse = '[]'; // No calendar connected, assume free
+                                }
+                              } catch (err: any) {
+                                console.error('[Tool Call] Error executing list_calendar_events:', err);
+                                calResponse = 'Failed to fetch calendar events.';
+                              }
+
+                              await geminiSession.sendToolResponse({
+                                functionResponses: [
+                                  {
+                                    name: 'list_calendar_events',
+                                    id: fn.id,
+                                    response: { status: 'success', events: calResponse },
                                   },
                                 ],
                               });

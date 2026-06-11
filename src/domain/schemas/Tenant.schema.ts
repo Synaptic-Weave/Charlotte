@@ -12,5 +12,7 @@ export const TenantSchema = new EntitySchema<Tenant>({
     destinationVerified: { type: 'boolean' },
     createdAt: { type: 'Date' },
     updatedAt: { type: 'Date', onUpdate: () => new Date() },
+    googleRefreshToken: { type: 'string', nullable: true },
+    googleCalendarId: { type: 'string', nullable: true },
   },
 });
