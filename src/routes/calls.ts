@@ -59,7 +59,7 @@ export function createCallsRouter(em: EntityManager): Router {
       const result = await runInTenantTransaction(em, async (txEm) => {
         const [callSessions, count] = await txEm.findAndCount(
           CallSession,
-          {},
+          { tenant: { id: tenantId } },
           {
             orderBy: { createdAt: 'DESC' },
             limit: isNaN(limit) ? 15 : limit,
@@ -105,7 +105,7 @@ export function createCallsRouter(em: EntityManager): Router {
       }
 
       const stats = await runInTenantTransaction(em, async (txEm) => {
-        const callSessions = await txEm.find(CallSession, {});
+        const callSessions = await txEm.find(CallSession, { tenant: { id: tenantId } });
         
         const totalCalls = callSessions.length;
         

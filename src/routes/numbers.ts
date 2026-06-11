@@ -60,37 +60,25 @@ export function createNumbersRouter(em: EntityManager): Router {
         return;
       }
 
-      if (twilioClient) {
-        // Query the real Twilio API
-        const availableNumbers = await twilioClient.availablePhoneNumbers('US').local.list({
-          areaCode: Number(areaCode),
-          limit: 10,
-        });
-
-        const results = availableNumbers.map((num) => ({
-          phoneNumber: num.phoneNumber,
-          friendlyName: num.friendlyName || num.phoneNumber,
-          locality: num.locality || 'Unknown',
-          region: num.region || 'US',
-        }));
-
-        res.status(200).json({ numbers: results, mode: 'live' });
-      } else {
-        // Mock fallback for sandbox/testing
-        const mockResults = Array.from({ length: 10 }).map((_, index) => {
-          const suffix = String(1000 + index).substring(1);
-          const rawNumber = `+1${areaCode}55501${suffix}`;
-          const formattedNumber = `(${areaCode}) 555-01${suffix}`;
-          return {
-            phoneNumber: rawNumber,
-            friendlyName: formattedNumber,
-            locality: 'Austin',
-            region: 'TX',
-          };
-        });
-
-        res.status(200).json({ numbers: mockResults, mode: 'mock' });
+      if (!twilioClient) {
+        res.status(503).json({ error: 'Real Twilio credentials (TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN) are missing. Cannot assign a real number. Please update your environment variables.' });
+        return;
       }
+
+      // Query the real Twilio API
+      const availableNumbers = await twilioClient.availablePhoneNumbers('US').local.list({
+        areaCode: Number(areaCode),
+        limit: 10,
+      });
+
+      const results = availableNumbers.map((num) => ({
+        phoneNumber: num.phoneNumber,
+        friendlyName: num.friendlyName || num.phoneNumber,
+        locality: num.locality || 'Unknown',
+        region: num.region || 'US',
+      }));
+
+      res.status(200).json({ numbers: results, mode: 'live' });
     } catch (error: any) {
       console.error('Error searching available phone numbers:', error);
       res.status(500).json({ error: error.message || 'Internal server error occurred searching numbers.' });
@@ -127,15 +115,17 @@ export function createNumbersRouter(em: EntityManager): Router {
 
         let actualFriendlyName = friendlyName || `Charlotte Virtual Line - ${phoneNumber}`;
 
-        if (twilioClient) {
-          // Programmatically buy the number on Twilio
-          const baseUrl = process.env.CHARLOTTE_API_BASE_URL || 'https://localhost:8080';
-          await twilioClient.incomingPhoneNumbers.create({
-            phoneNumber,
-            friendlyName: actualFriendlyName,
-            voiceUrl: `${baseUrl}/api/webhook/twilio/inbound-call`,
-          });
+        if (!twilioClient) {
+          throw new Error('Real Twilio credentials (TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN) are missing. Cannot assign a real number. Please update your environment variables.');
         }
+
+        // Programmatically buy the number on Twilio
+        const baseUrl = process.env.CHARLOTTE_API_BASE_URL || 'https://localhost:8080';
+        await twilioClient.incomingPhoneNumbers.create({
+          phoneNumber,
+          friendlyName: actualFriendlyName,
+          voiceUrl: `${baseUrl}/api/webhook/twilio/inbound-call`,
+        });
 
         // Instantiate and persist the TwilioPhoneNumber entity
         const twilioPhone = TwilioPhoneNumber.create(tenant, phoneNumber, actualFriendlyName);

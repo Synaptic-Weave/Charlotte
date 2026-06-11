@@ -836,16 +836,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
                 </div>
 
                 {/* WEBHOOK URL */}
-                <div className="form-group" style={{ marginBottom: 0 }}>
+                <div className="form-group mb-4">
                   <label className="form-label" htmlFor="settings-webhook">Twilio Webhook Target URL</label>
-                  <input 
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
+                    This URL is automatically registered with Twilio by the backend when you provision a number.
+                  </p>
+                  <div className="input-group">
+                    <input 
+                    type="url" 
                     id="settings-webhook" 
-                    type="text" 
-                    className="input-field" 
-                    style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}
-                    readOnly
+                    className="form-control code-input" 
+                    readOnly 
+                    disabled 
                     value={`${window.location.origin}/api/webhook/twilio/inbound-call`}
                   />
+                  </div>
                 </div>
 
                 {/* ACTIONS */}
