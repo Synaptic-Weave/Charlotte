@@ -290,7 +290,6 @@ describe('Charlotte Warm Transfer & Call Bridging Integration Tests', () => {
       expect(xml).toContain('<Gather');
       expect(xml).toContain('action="/api/webhook/twilio/transfer-decision');
       expect(xml).toContain('numDigits="1"');
-      expect(xml).toContain('Support'); // speaks department
     });
   });
 

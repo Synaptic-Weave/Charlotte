@@ -159,10 +159,31 @@ export function createWebhooksRouter(em: EntityManager): Router {
 
       console.log(`[Webhook] Transfer whisper prompt. InboundCallSid: ${inboundCallSid}, Department: ${department}, TenantId: ${tenantId}`);
 
+      let callerName = 'someone';
+      let callerPurpose = 'an unknown purpose';
+
+      if (tenantId) {
+        try {
+          await tenantLocalStorage.run({ tenantId }, async () => {
+            await runInTenantTransaction(em, async (txEm) => {
+              const callSession = await txEm.findOne(CallSession, { callSid: inboundCallSid });
+              if (callSession) {
+                if (callSession.callerName) callerName = callSession.callerName;
+                if (callSession.callerPurpose) callerPurpose = callSession.callerPurpose;
+              }
+            });
+          });
+        } catch (err) {
+          console.error('[Webhook] Error fetching CallSession for whisper prompt:', err);
+        }
+      }
+
+      const promptText = `You have an incoming call from ${escapeXml(callerName)} regarding ${escapeXml(callerPurpose)}. Press 1 to accept this call, or press 2 to send it to voicemail.`;
+
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Gather action="/api/webhook/twilio/transfer-decision?inboundCallSid=${inboundCallSid}&amp;department=${encodeURIComponent(department)}" numDigits="1" timeout="10">
-    <Say voice="Polly.Joanna-Neural">You have an incoming call from Charlotte for the ${escapeXml(department)} department. Press 1 to accept this call, or press 2 to send it to voicemail.</Say>
+    <Say voice="Polly.Joanna-Neural">${promptText}</Say>
   </Gather>
   <Redirect>/api/webhook/twilio/transfer-decision?inboundCallSid=${inboundCallSid}&amp;department=${encodeURIComponent(department)}&amp;timeout=true</Redirect>
 </Response>`;

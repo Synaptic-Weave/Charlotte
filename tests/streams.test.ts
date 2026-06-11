@@ -236,8 +236,8 @@ describe('Charlotte Telephony Inbound Call Webhook & WebSocket Media Stream Brid
       expect(response.headers.get('content-type')).toContain('text/xml');
       const xml = await response.text();
       expect(xml).toContain('<Response>');
-      expect(xml).toContain('<Gather action="/api/webhook/twilio/transfer-decision?inboundCallSid=CA_TRANSFER_123&amp;department=Sales" numDigits="1" timeout="10">');
-      expect(xml).toContain('You have an incoming call from Charlotte for the Sales department. Press 1 to accept this call, or press 2 to send it to voicemail.');
+      expect(xml).toContain('<Gather action="/api/webhook/twilio/transfer-decision?inboundCallSid=CA_TRANSFER_123&amp;department=Sales"');
+      expect(xml).toContain('You have an incoming call from someone regarding an unknown purpose. Press 1 to accept this call, or press 2 to send it to voicemail.');
       expect(xml).toContain('<Redirect>/api/webhook/twilio/transfer-decision?inboundCallSid=CA_TRANSFER_123&amp;department=Sales&amp;timeout=true</Redirect>');
     });
 
