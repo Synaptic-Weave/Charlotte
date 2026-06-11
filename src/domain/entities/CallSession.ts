@@ -10,6 +10,8 @@ export class CallSession {
   streamSid: string | null;
   status: CallSessionStatus;
   callerNumber: string;
+  callerName: string | null;
+  callerPurpose: string | null;
   messages: any[];
   recordingUrl: string | null;
   readonly createdAt: Date;
@@ -22,6 +24,8 @@ export class CallSession {
     streamSid: string | null,
     status: CallSessionStatus,
     callerNumber: string,
+    callerName: string | null,
+    callerPurpose: string | null,
     messages: any[],
     recordingUrl: string | null,
     createdAt: Date,
@@ -33,6 +37,8 @@ export class CallSession {
     this.streamSid = streamSid;
     this.status = status;
     this.callerNumber = callerNumber;
+    this.callerName = callerName;
+    this.callerPurpose = callerPurpose;
     this.messages = messages;
     this.recordingUrl = recordingUrl;
     this.createdAt = createdAt;
@@ -48,11 +54,19 @@ export class CallSession {
       null,
       'initiated',
       callerNumber,
+      null,
+      null,
       [],
       null,
       now,
       now
     );
+  }
+
+  updateCallerInfo(name: string | null, purpose: string | null): void {
+    if (name) this.callerName = name;
+    if (purpose) this.callerPurpose = purpose;
+    this.updatedAt = new Date();
   }
 
   updateStreamSid(streamSid: string): void {

@@ -207,7 +207,8 @@ export function registerStreamHandler(wss: WebSocketServer, em: EntityManager): 
                           text: `You are Charlotte, the professional, friendly, and efficient AI-powered virtual receptionist for ${activeTenant.name}.
 When the conversation starts, you MUST pause for 1 second, then answer the phone by saying exactly: 'Hello, thanks for calling ${activeTenant.name}, how can I assist you?'
 Your job is to answer the caller's questions with brief, direct, and conversational responses suitable for a real-time telephone conversation.
-If the caller asks to be connected, transferred, or routed to a specific department (such as Sales, Support, Billing, or a human agent), you MUST immediately call the 'transfer_call' tool with the destination.
+If the caller asks to be connected, transferred, or routed to a specific department (such as Sales, Support, Billing, or a human agent), you MUST first ask for their name and the purpose of their call.
+Once the caller provides their name and purpose, you MUST call 'update_customer_name' to update the CRM, and then immediately call the 'transfer_call' tool with the destination, their name, and their purpose.
 Never tell the caller to call another number or try another way; always use the 'transfer_call' tool when routing is requested.`,
                         },
                       ],
@@ -217,7 +218,7 @@ Never tell the caller to call another number or try another way; always use the 
                         functionDeclarations: [
                           {
                             name: 'transfer_call',
-                            description: 'Route or transfer the call to a specific department or human agent.',
+                            description: 'Route or transfer the call to a specific department or human agent. Requires the caller name and purpose of the call.',
                             parameters: {
                               type: 'OBJECT' as any,
                               properties: {
@@ -225,8 +226,30 @@ Never tell the caller to call another number or try another way; always use the 
                                   type: 'STRING' as any,
                                   description: 'The name of the department or human agent to transfer the call to (e.g. Sales, Support, Billing, Front Desk, or a specific employee name).',
                                 },
+                                caller_name: {
+                                  type: 'STRING' as any,
+                                  description: 'The name of the caller.',
+                                },
+                                purpose: {
+                                  type: 'STRING' as any,
+                                  description: 'The purpose of the call.',
+                                },
                               },
-                              required: ['department'],
+                              required: ['department', 'caller_name', 'purpose'],
+                            },
+                          },
+                          {
+                            name: 'update_customer_name',
+                            description: 'Update the customer name in the CRM after they provide it.',
+                            parameters: {
+                              type: 'OBJECT' as any,
+                              properties: {
+                                name: {
+                                  type: 'STRING' as any,
+                                  description: 'The name of the customer.',
+                                },
+                              },
+                              required: ['name'],
                             },
                           },
                           {
@@ -408,8 +431,24 @@ Never tell the caller to call another number or try another way; always use the 
                         if (functionCalls) {
                           for (const fn of functionCalls) {
                             if (fn.name === 'transfer_call') {
-                              const { department } = fn.args as { department: string };
-                              console.log(`[Tool Call] Model triggered transfer_call to: ${department}`);
+                              const { department, caller_name, purpose } = fn.args as { department: string; caller_name: string; purpose: string };
+                              console.log(`[Tool Call] Model triggered transfer_call to: ${department} for ${caller_name} (Purpose: ${purpose})`);
+
+                              // Update CallSession with callerName and callerPurpose
+                              try {
+                                await tenantLocalStorage.run({ tenantId: tenantId! }, async () => {
+                                  await runInTenantTransaction(em, async (txEm) => {
+                                    const callSession = await txEm.findOne(CallSession, { callSid });
+                                    if (callSession) {
+                                      callSession.updateCallerInfo(caller_name, purpose);
+                                      txEm.persist(callSession);
+                                      await txEm.flush();
+                                    }
+                                  });
+                                });
+                              } catch (err) {
+                                console.error('[Tool Call] Error updating CallSession caller info:', err);
+                              }
 
                               // Acknowledge tool execution back to Gemini
                               await geminiSession.sendToolResponse({
@@ -523,6 +562,48 @@ Never tell the caller to call another number or try another way; always use the 
                                     response: {
                                       status: 'success',
                                       message: crmResponse,
+                                    },
+                                  },
+                                ],
+                              });
+                            } else if (fn.name === 'update_customer_name') {
+                              const { name } = fn.args as { name: string };
+                              console.log(`[Tool Call] Model triggered update_customer_name: ${name}`);
+                              
+                              let updateResponse = 'Failed to update customer name.';
+                              try {
+                                await tenantLocalStorage.run({ tenantId: tenantId! }, async () => {
+                                  await runInTenantTransaction(em, async (txEm) => {
+                                    // Try to find the call session first to get callerNumber
+                                    const callSession = await txEm.findOne(CallSession, { callSid });
+                                    if (callSession && callSession.callerNumber) {
+                                      const { CustomerService } = await import('../services/CustomerService.js');
+                                      const customerSvc = new CustomerService(txEm);
+                                      const customer = await customerSvc.findByPhoneNumber(callSession.callerNumber);
+                                      if (customer) {
+                                        customer.updateName(name);
+                                        txEm.persist(customer);
+                                        await txEm.flush();
+                                        updateResponse = `Customer name successfully updated to ${name}.`;
+                                      } else {
+                                        const newCustomer = await customerSvc.createCustomer(callSession.callerNumber, name);
+                                        updateResponse = `New customer created with name ${name}.`;
+                                      }
+                                    }
+                                  });
+                                });
+                              } catch (err) {
+                                console.error('[Tool Call] Error updating customer name:', err);
+                              }
+
+                              await geminiSession.sendToolResponse({
+                                functionResponses: [
+                                  {
+                                    name: 'update_customer_name',
+                                    id: fn.id,
+                                    response: {
+                                      status: 'success',
+                                      message: updateResponse,
                                     },
                                   },
                                 ],
