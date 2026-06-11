@@ -99,6 +99,11 @@ jobs:
           gcloud run deploy charlotte-backend-uat \
             --image ${{ env.BACKEND_IMAGE }}:${{ github.sha }} \
             --region ${{ env.REGION }} \
+            --service-account="charlotte-backend-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com" \
+            --vpc-connector="projects/${{ env.PROJECT_ID }}/locations/${{ env.REGION }}/connectors/charlotte-vpc-conn" \
+            --vpc-egress="private-ranges-only" \
+            --update-env-vars="NODE_ENV=production,JWT_EXPIRY=24h,BCRYPT_SALT_ROUNDS=12,GEMINI_MODEL_NAME=gemini-2.0-flash-exp,GEMINI_VOICE_ID=aoede" \
+            --set-secrets="DATABASE_URL=database_url:latest,TWILIO_ACCOUNT_SID=twilio_account_sid:latest,TWILIO_AUTH_TOKEN=twilio_auth_token:latest,TWILIO_API_KEY=twilio_api_key:latest,TWILIO_API_SECRET=twilio_api_secret:latest,GEMINI_API_KEY=gemini_api_key:latest,JWT_SECRET=jwt_secret:latest" \
             --quiet
 
       - name: Deploy Frontend to Cloud Run
@@ -106,6 +111,8 @@ jobs:
           gcloud run deploy charlotte-frontend-uat \
             --image ${{ env.FRONTEND_IMAGE }}:${{ github.sha }} \
             --region ${{ env.REGION }} \
+            --service-account="charlotte-frontend-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com" \
+            --update-env-vars="VITE_API_URL=https://charlotte-backend-uat-701784399937.us-central1.run.app" \
             --quiet
 
   deploy-prod:
@@ -146,6 +153,11 @@ jobs:
           gcloud run deploy charlotte-backend-prod \
             --image ${{ env.BACKEND_IMAGE }}:${{ github.sha }} \
             --region ${{ env.REGION }} \
+            --service-account="charlotte-backend-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com" \
+            --vpc-connector="projects/${{ env.PROJECT_ID }}/locations/${{ env.REGION }}/connectors/charlotte-vpc-conn" \
+            --vpc-egress="private-ranges-only" \
+            --update-env-vars="NODE_ENV=production,JWT_EXPIRY=24h,BCRYPT_SALT_ROUNDS=12,GEMINI_MODEL_NAME=gemini-2.0-flash-exp,GEMINI_VOICE_ID=aoede" \
+            --set-secrets="DATABASE_URL=database_url:latest,TWILIO_ACCOUNT_SID=twilio_account_sid:latest,TWILIO_AUTH_TOKEN=twilio_auth_token:latest,TWILIO_API_KEY=twilio_api_key:latest,TWILIO_API_SECRET=twilio_api_secret:latest,GEMINI_API_KEY=gemini_api_key:latest,JWT_SECRET=jwt_secret:latest" \
             --quiet
 
       - name: Deploy Frontend to Cloud Run
@@ -153,4 +165,6 @@ jobs:
           gcloud run deploy charlotte-frontend-prod \
             --image ${{ env.FRONTEND_IMAGE }}:${{ github.sha }} \
             --region ${{ env.REGION }} \
+            --service-account="charlotte-frontend-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com" \
+            --update-env-vars="VITE_API_URL=https://charlotte-backend-prod-701784399937.us-central1.run.app" \
             --quiet
