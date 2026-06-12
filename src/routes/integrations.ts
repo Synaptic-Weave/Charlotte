@@ -16,13 +16,13 @@ export function createIntegrationsRouter(em: EntityManager): Router {
   };
 
   router.get('/google/auth', authenticateToken, (req, res) => {
-    const user = (req as any).user;
+    const context = req.context;
     const oauth2Client = getOauth2Client();
     const url = oauth2Client.generateAuthUrl({
       access_type: 'offline',
       prompt: 'consent',
       scope: ['https://www.googleapis.com/auth/calendar', 'https://www.googleapis.com/auth/calendar.events'],
-      state: user!.tenantId,
+      state: context!.tenantId,
     });
     res.json({ url });
   });
@@ -54,8 +54,8 @@ export function createIntegrationsRouter(em: EntityManager): Router {
   });
 
   router.get('/google/calendars', authenticateToken, async (req, res) => {
-    const user = (req as any).user;
-    const tenantId = user!.tenantId;
+    const context = req.context;
+    const tenantId = context!.tenantId;
     const tenant = await em.findOne(Tenant, { id: tenantId });
     if (!tenant || !tenant.googleRefreshToken) {
       return res.status(400).json({ error: 'Google Calendar not connected' });
@@ -74,8 +74,8 @@ export function createIntegrationsRouter(em: EntityManager): Router {
 
   router.post('/google/calendars', authenticateToken, async (req, res) => {
     const { calendarId } = req.body;
-    const user = (req as any).user;
-    const tenantId = user!.tenantId;
+    const context = req.context;
+    const tenantId = context!.tenantId;
     
     if (!calendarId) return res.status(400).json({ error: 'Missing calendarId' });
     
