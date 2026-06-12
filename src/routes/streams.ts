@@ -675,12 +675,12 @@ Never tell the caller to call another number or try another way; always use the 
               const base64MuLaw = msg.media.payload;
               const geminiPayload = transcodeTwilioToGemini(base64MuLaw);
 
-              await geminiSession.sendRealtimeInput({
-                media: {
+              await geminiSession.sendRealtimeInput([{
+                audio: {
                   data: geminiPayload,
                   mimeType: 'audio/pcm;rate=16000',
                 },
-              });
+              }]);
             }
             break;
           }
