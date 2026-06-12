@@ -111,6 +111,7 @@ jobs:
           gcloud run deploy charlotte-frontend-uat \
             --image ${{ env.FRONTEND_IMAGE }}:${{ github.sha }} \
             --region ${{ env.REGION }} \
+            --port 8080 \
             --service-account="charlotte-frontend-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com" \
             --update-env-vars="VITE_API_URL=https://charlotte-backend-uat-701784399937.us-central1.run.app" \
             --quiet
@@ -165,6 +166,7 @@ jobs:
           gcloud run deploy charlotte-frontend \
             --image ${{ env.FRONTEND_IMAGE }}:${{ github.sha }} \
             --region ${{ env.REGION }} \
+            --port 8080 \
             --service-account="charlotte-frontend-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com" \
             --update-env-vars="VITE_API_URL=https://charlotte-backend-unsa2gq4ta-uc.a.run.app" \
             --quiet
