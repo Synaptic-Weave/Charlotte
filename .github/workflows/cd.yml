@@ -117,7 +117,7 @@ jobs:
 
   deploy-prod:
     name: Deploy to Production
-    needs: build
+    needs: [build, deploy-uat]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     environment: Production
