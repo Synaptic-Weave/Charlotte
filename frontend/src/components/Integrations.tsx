@@ -70,28 +70,29 @@ export const Integrations: React.FC<{ token: string }> = ({ token }) => {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-      <h2 className="text-lg font-semibold text-slate-900 mb-4">Google Calendar Integration</h2>
-      <p className="text-slate-600 mb-4">Connect your Google Workspace to allow the AI to check availability and book appointments directly on your calendar.</p>
+    <div className="glass-card" style={{ padding: '2rem' }}>
+      <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.25rem', marginBottom: '1rem' }}>Google Calendar Integration</h2>
+      <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.95rem', lineHeight: '1.6' }}>Connect your Google Workspace to allow the AI to check availability and book appointments directly on your calendar.</p>
       
       {!calendars.length ? (
         <button
           onClick={handleConnect}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded transition-colors"
+          className="gradient-btn"
         >
           Connect Google Calendar
         </button>
       ) : (
         <div>
-          <h3 className="text-md font-medium text-slate-800 mb-2">Select a Calendar</h3>
-          {loading ? <p>Loading...</p> : (
-            <ul className="space-y-2">
+          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.1rem', marginBottom: '1rem', color: 'var(--text-primary)' }}>Select a Calendar</h3>
+          {loading ? <p style={{ color: 'var(--text-secondary)' }}>Loading...</p> : (
+            <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {calendars.map(cal => (
-                <li key={cal.id} className="flex items-center justify-between bg-slate-50 p-3 rounded border border-slate-100">
-                  <span className="text-slate-700 font-medium">{cal.summary}</span>
+                <li key={cal.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--card-bg)', padding: '1rem', borderRadius: 'var(--border-radius-sm)', border: '1px solid var(--card-border)' }}>
+                  <span style={{ fontWeight: 500 }}>{cal.summary}</span>
                   <button
                     onClick={() => handleSelectCalendar(cal.id)}
-                    className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                    className="secondary-btn"
+                    style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
                   >
                     Select
                   </button>
