@@ -269,6 +269,34 @@ resource "google_secret_manager_secret_version" "db_url_version" {
   secret_data = "postgresql://${var.db_user}:${urlencode(random_password.db_password.result)}@${local.db_ip}:5432/${var.db_name}?sslmode=disable"
 }
 
+resource "google_secret_manager_secret" "google_client_id" {
+  secret_id = local.env == "prod" ? "google_client_id" : "google_client_id_${local.env}"
+  project   = var.project_id
+  replication {
+    auto {}
+  }
+  depends_on = [google_project_service.gcp_services]
+}
+
+resource "google_secret_manager_secret_version" "google_client_id_version" {
+  secret      = google_secret_manager_secret.google_client_id.id
+  secret_data = var.google_client_id
+}
+
+resource "google_secret_manager_secret" "google_client_secret" {
+  secret_id = local.env == "prod" ? "google_client_secret" : "google_client_secret_${local.env}"
+  project   = var.project_id
+  replication {
+    auto {}
+  }
+  depends_on = [google_project_service.gcp_services]
+}
+
+resource "google_secret_manager_secret_version" "google_client_secret_version" {
+  secret      = google_secret_manager_secret.google_client_secret.id
+  secret_data = var.google_client_secret
+}
+
 # -------------------------------------------------------------------------
 # 5. Service Accounts for Frontend and Backend
 # -------------------------------------------------------------------------
@@ -294,7 +322,9 @@ locals {
     google_secret_manager_secret.gemini_api_key.secret_id,
     google_secret_manager_secret.jwt_secret.secret_id,
     google_secret_manager_secret.db_password.secret_id,
-    google_secret_manager_secret.db_url.secret_id
+    google_secret_manager_secret.db_url.secret_id,
+    google_secret_manager_secret.google_client_id.secret_id,
+    google_secret_manager_secret.google_client_secret.secret_id
   ]
 }
 
@@ -438,6 +468,8 @@ resource "google_cloud_run_v2_service" "backend" {
     google_secret_manager_secret_version.twilio_api_secret_version,
     google_secret_manager_secret_version.gemini_api_key_version,
     google_secret_manager_secret_version.jwt_secret_version,
+    google_secret_manager_secret_version.google_client_id_version,
+    google_secret_manager_secret_version.google_client_secret_version,
     google_vpc_access_connector.connector
   ]
 }
