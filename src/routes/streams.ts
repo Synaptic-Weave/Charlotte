@@ -521,7 +521,7 @@ Never tell the caller to call another number or try another way; always use the 
                               try {
                                 await tenantLocalStorage.run({ tenantId: tenantId! }, async () => {
                                   const { CustomerService } = await import('../services/CustomerService.js');
-                                  const customerSvc = new CustomerService(em);
+                                  const customerSvc = new CustomerService(em.fork());
                                   const customer = await customerSvc.findByPhoneNumber(phoneNumber);
                                   if (customer) {
                                     crmResponse = `Customer found: ID: ${customer.id}, Name: ${customer.name}. Context: ${customer.context || 'None'}`;
@@ -597,7 +597,7 @@ Never tell the caller to call another number or try another way; always use the 
                               try {
                                 await tenantLocalStorage.run({ tenantId: tenantId! }, async () => {
                                   const { AppointmentService } = await import('../services/AppointmentService.js');
-                                  const appointmentSvc = new AppointmentService(em);
+                                  const appointmentSvc = new AppointmentService(em.fork());
                                   const appointment = await appointmentSvc.bookAppointment(customerId, departmentName, dateString);
                                   bookResponse = `Appointment successfully booked for ${appointment.date} with ${departmentName}.`;
                                 });
