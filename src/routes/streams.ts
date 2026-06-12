@@ -549,7 +549,8 @@ Never tell the caller to call another number or try another way; always use the 
                               console.log(`[Tool Call] Model triggered list_calendar_events: ${timeMin} to ${timeMax}`);
                               let calResponse = '';
                               try {
-                                const tenant = await em.findOne(Tenant, { id: tenantId });
+                                const fork = em.fork();
+                                const tenant = await fork.findOne(Tenant, { id: tenantId });
                                 if (tenant && tenant.googleRefreshToken && tenant.googleCalendarId) {
                                   const { google } = await import('googleapis');
                                   const oauth2Client = new google.auth.OAuth2(
