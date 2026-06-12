@@ -211,7 +211,7 @@ export const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
                 id="auth-email"
                 type="email"
                 className="input-field"
-                placeholder="michael@brownconsulting.com"
+                placeholder="johndoe@yourcompany.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 style={{ paddingLeft: '2.75rem' }}
@@ -254,7 +254,7 @@ export const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
                     id="auth-tenant-name"
                     type="text"
                     className="input-field"
-                    placeholder="Brown Consulting"
+                    placeholder="Your Company Name Here"
                     value={tenantName}
                     onChange={(e) => setTenantName(e.target.value)}
                     style={{ paddingLeft: '2.75rem' }}
