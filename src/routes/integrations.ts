@@ -39,11 +39,12 @@ export function createIntegrationsRouter(em: EntityManager): Router {
       const { tokens } = await oauth2Client.getToken(code);
       
       if (tokens.refresh_token) {
-        const tenant = await em.findOne(Tenant, { id: tenantId });
+        const fork = em.fork();
+        const tenant = await fork.findOne(Tenant, { id: tenantId });
         if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
         
         tenant.googleRefreshToken = tokens.refresh_token;
-        await em.flush();
+        await fork.flush();
       }
 
       res.json({ success: true });
@@ -56,7 +57,8 @@ export function createIntegrationsRouter(em: EntityManager): Router {
   router.get('/google/calendars', authenticateToken, async (req, res) => {
     const context = req.context;
     const tenantId = context!.tenantId;
-    const tenant = await em.findOne(Tenant, { id: tenantId });
+    const fork = em.fork();
+    const tenant = await fork.findOne(Tenant, { id: tenantId });
     if (!tenant || !tenant.googleRefreshToken) {
       return res.status(400).json({ error: 'Google Calendar not connected' });
     }
@@ -79,11 +81,12 @@ export function createIntegrationsRouter(em: EntityManager): Router {
     
     if (!calendarId) return res.status(400).json({ error: 'Missing calendarId' });
     
-    const tenant = await em.findOne(Tenant, { id: tenantId });
+    const fork = em.fork();
+    const tenant = await fork.findOne(Tenant, { id: tenantId });
     if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
     
     tenant.googleCalendarId = calendarId;
-    await em.flush();
+    await fork.flush();
     res.json({ success: true });
   });
 
