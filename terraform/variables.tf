@@ -81,3 +81,17 @@ variable "frontend_image" {
   type        = string
   default     = "us-central1-docker.pkg.dev/charlotte-sw/charlotte-repo/charlotte-frontend:latest"
 }
+
+variable "google_client_id" {
+  description = "Google OAuth Client ID for Calendar Integration"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "google_client_secret" {
+  description = "Google OAuth Client Secret for Calendar Integration"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
