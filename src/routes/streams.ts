@@ -464,7 +464,7 @@ Never tell the caller to call another number or try another way; always use the 
                                   }
 
                                   console.log(`[Twilio REST] Putting inbound caller ${callSid} into conference Conf_${callSid}...`);
-                                  const holdMusicUrl = process.env.HOLD_MUSIC_URL || 'https://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestain-MM-MAMBO.mp3';
+                                  const holdMusicUrl = process.env.HOLD_MUSIC_URL || 'http://com.twilio.music.classical.s3.amazonaws.com/BusyStrings.mp3';
                                   await twilioClient.calls(callSid).update({
                                     twiml: `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
