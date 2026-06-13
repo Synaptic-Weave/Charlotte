@@ -10,7 +10,7 @@ export const UserSchema = new EntitySchema<User>({
     tenant: { kind: 'm:1', entity: () => 'Tenant', deleteRule: 'cascade' },
     email: { type: 'string', unique: true },
     passwordHash: { type: 'string' },
-    role: { type: 'string' },
+    role: { kind: 'm:1', entity: () => 'UserRole', nullable: true },
     createdAt: { type: 'Date' },
     updatedAt: { type: 'Date', onUpdate: () => new Date() },
   },

@@ -23,7 +23,7 @@ const isTwilioConfigured = accountSid && authToken && accountSid.startsWith('AC'
 const twilioClient = isTwilioConfigured ? twilio(accountSid as string, authToken as string) : null;
 
 // Setup Twilio webhook validator middleware
-const validateTwilio = (req: any, res: any, next: any) => {
+const validateTwilio = (req: unknown, res: unknown, next: unknown) => {
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   if (!authToken) {
     return next();
@@ -146,7 +146,7 @@ export function createWebhooksRouter(em: EntityManager): Router {
 
       res.type('text/xml');
       res.send(twiml);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[Webhook] Error handling inbound call webhook:', error);
       res.status(500).send('Internal server error occurred processing call.');
     }
@@ -179,7 +179,7 @@ export function createWebhooksRouter(em: EntityManager): Router {
 
       res.type('text/xml');
       res.send(twiml);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[Webhook] Error in transfer-whisper:', error);
       res.status(500).send('Internal server error processing transfer whisper.');
     }
@@ -236,7 +236,7 @@ export function createWebhooksRouter(em: EntityManager): Router {
 </Response>`
           });
           console.log(`[Twilio REST] Inbound call ${inboundCallSid} successfully redirected to voicemail.`);
-        } catch (err: any) {
+        } catch (err: unknown) {
           console.error(`[Twilio REST] Failed to redirect inbound call ${inboundCallSid} to voicemail:`, err);
         }
       } else {
@@ -245,7 +245,7 @@ export function createWebhooksRouter(em: EntityManager): Router {
 
       res.type('text/xml');
       res.send(ownerTwiml);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[Webhook] Error in transfer-decision:', error);
       res.status(500).send('Internal server error processing transfer decision.');
     }
@@ -267,7 +267,7 @@ export function createWebhooksRouter(em: EntityManager): Router {
       if (inboundCallSid && recordingUrl) {
         // Use an admin fork (no tenant context) to resolve the session and its tenant
         const adminFork = em.fork();
-        const callSession = await adminFork.findOne(CallSession, { callSid: inboundCallSid }, { populate: ['tenant'] as any });
+        const callSession = await adminFork.findOne(CallSession, { callSid: inboundCallSid }, { populate: ['tenant'] as never });
         if (callSession) {
           const tenantId = callSession.tenant.id;
           await tenantLocalStorage.run({ tenantId }, async () => {
@@ -294,7 +294,7 @@ export function createWebhooksRouter(em: EntityManager): Router {
 
       res.type('text/xml');
       res.send(twiml);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[Webhook] Error in voicemail-callback:', error);
       res.status(500).send('Internal server error processing voicemail callback.');
     }

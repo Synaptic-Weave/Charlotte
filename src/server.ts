@@ -12,6 +12,11 @@ import { createWebhooksRouter } from './routes/webhooks.js';
 import { createCallsRouter } from './routes/calls.js';
 import { createIntegrationsRouter } from './routes/integrations.js';
 import { registerStreamHandler } from './routes/streams.js';
+import { createAdminRolesRouter } from './routes/admin/roles.js';
+import { adminAuth } from './middlewares/adminAuth.js';
+import { UserApplicationService } from './services/UserApplicationService.js';
+import { AdminService } from './services/AdminService.js';
+
 
 const PORT = Number(process.env.PORT || 8080);
 const app = express();
@@ -48,8 +53,14 @@ async function bootstrap() {
     });
   });
 
+  // Services
+  const userService = new UserApplicationService(orm.em);
+  const adminService = new AdminService(orm.em);
+
   // Register routes
-  app.use('/api/auth', createAuthRouter(orm.em));
+  app.use('/api/auth', createAuthRouter(userService));
+  app.use('/api/admin/roles', adminAuth, createAdminRolesRouter(adminService));
+
   app.use('/api/tenants/numbers', createNumbersRouter(orm.em));
   app.use('/api/webhook', createWebhooksRouter(orm.em));
   app.use('/api/tenants/calls', createCallsRouter(orm.em));
@@ -168,7 +179,7 @@ async function bootstrap() {
   });
 
   // Global Error Handler
-  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  app.use((err: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
     console.error('Unhandled API Error:', err);
     const status = typeof err.status === 'number' ? err.status : 500;
     const message = status < 500 ? err.message : 'Internal server error occurred.';

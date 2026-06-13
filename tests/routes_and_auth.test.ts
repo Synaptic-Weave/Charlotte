@@ -11,9 +11,11 @@ import { Organization } from '../src/domain/entities/Organization.js';
 import { TwilioPhoneNumber } from '../src/domain/entities/TwilioPhoneNumber.js';
 import { TenantSchema } from '../src/domain/schemas/Tenant.schema.js';
 import { UserSchema } from '../src/domain/schemas/User.schema.js';
+import { UserRoleSchema, SuperAdminSchema, TenantAdminSchema } from '../src/domain/schemas/UserRole.schema.js';
 import { OrganizationSchema } from '../src/domain/schemas/Organization.schema.js';
 import { TwilioPhoneNumberSchema } from '../src/domain/schemas/TwilioPhoneNumber.schema.js';
 import { authenticateToken } from '../src/middleware/auth.js';
+import { UserApplicationService } from '../src/services/UserApplicationService.js';
 
 let createAuthRouter: any;
 let createNumbersRouter: any;
@@ -88,8 +90,8 @@ describe('Charlotte API Routes and Authentication Middleware Integration Tests',
     orm = await MikroORM.init({
       ...config,
       clientUrl: dbUrl,
-      entities: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema],
-      entitiesTs: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema],
+      entities: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema, UserRoleSchema, SuperAdminSchema, TenantAdminSchema],
+      entitiesTs: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema, UserRoleSchema, SuperAdminSchema, TenantAdminSchema],
     });
 
     console.log('[Test Setup] Aligning database migrations...');
@@ -121,7 +123,7 @@ describe('Charlotte API Routes and Authentication Middleware Integration Tests',
     // Using bcrypt to hash a test password so that our live /login endpoint succeeds
     const bcrypt = await import('bcryptjs');
     const passwordHash = await bcrypt.default.hash('testpassword123', 12);
-    seededUser = User.create(seededTenant, 'routes-test@example.com', passwordHash, 'admin');
+    seededUser = User.create(seededTenant, 'routes-test@example.com', passwordHash);
 
     await fork.persist([seededTenant, seededUser]);
     await fork.flush();
@@ -143,7 +145,8 @@ describe('Charlotte API Routes and Authentication Middleware Integration Tests',
     app.use(express.urlencoded({ extended: true }));
 
     // Mount Auth Router
-    app.use('/api/auth', createAuthRouter(orm.em));
+    const userService = new UserApplicationService(orm.em);
+    app.use('/api/auth', createAuthRouter(userService));
 
     // Mount Numbers Router
     app.use('/api/tenants/numbers', createNumbersRouter(orm.em));
@@ -154,6 +157,11 @@ describe('Charlotte API Routes and Authentication Middleware Integration Tests',
         message: 'Access granted.',
         context: req.context,
       });
+    });
+
+    app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+      const status = err.status || 500;
+      res.status(status).json({ error: err.message || 'Internal server error occurred.' });
     });
 
     server = http.createServer(app);

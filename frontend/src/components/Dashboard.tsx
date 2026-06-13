@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, PlusCircle, MessageSquare, Settings, LogOut, 
-  Phone, Award, Calendar, Volume2, UserCheck, Play
+  Phone, Award, Calendar, Volume2, UserCheck, Play, Shield
 } from 'lucide-react';
 import { TranscriptBox } from './TranscriptBox';
 import type { TranscriptMessage } from './TranscriptBox';
 import { NumberWizard } from './NumberWizard';
 import { Integrations } from './Integrations';
+import { AdminRoles } from './AdminRoles';
 
 interface TenantData {
   id: string;
@@ -33,8 +34,19 @@ interface CallLog {
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTenant, onSignOut }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'provision' | 'live' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'provision' | 'live' | 'settings' | 'admin'>('overview');
   const [currentTheme, setCurrentTheme] = useState<string>('');
+
+  // Parse token
+  const parseJwt = (t: string) => {
+    try {
+      return JSON.parse(atob(t.split('.')[1]));
+    } catch (e) {
+      return null;
+    }
+  };
+  const decoded = parseJwt(token);
+  const isSuperAdmin = decoded?.role === 'super_admin';
   
   // Tenant local configurations
   const [tenantName, setTenantName] = useState(tenant.name);
@@ -439,6 +451,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
             <Settings />
             <span>Agent Settings</span>
           </li>
+          {isSuperAdmin && (
+            <li id="nav-admin" className={`nav-item ${activeTab === 'admin' ? 'active' : ''}`} onClick={() => setActiveTab('admin')}>
+              <Shield />
+              <span>Admin Access</span>
+            </li>
+          )}
         </ul>
 
         {/* PREMIUM THEME SWAPPER INSIDE SIDEBAR */}
@@ -508,6 +526,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
               {activeTab === 'provision' && 'Provisioning Portal'}
               {activeTab === 'live' && 'Active Virtual Terminal'}
               {activeTab === 'settings' && 'AI Agent Settings'}
+              {activeTab === 'admin' && 'SuperAdmin Dashboard'}
             </h1>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
               Isolated Workspace Environment: <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{tenantName}</span>
@@ -857,6 +876,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
               <Integrations token={token} />
             </div>
 
+          </div>
+        )}
+
+        {/* 5. ADMIN ROLES VIEW */}
+        {activeTab === 'admin' && isSuperAdmin && (
+          <div style={{ animation: 'modalScaleUp 0.3s ease' }}>
+            <AdminRoles token={token} />
           </div>
         )}
 

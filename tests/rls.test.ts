@@ -9,6 +9,7 @@ import { TwilioPhoneNumber } from '../src/domain/entities/TwilioPhoneNumber.js';
 import { CallSession } from '../src/domain/entities/CallSession.js';
 import { TenantSchema } from '../src/domain/schemas/Tenant.schema.js';
 import { UserSchema } from '../src/domain/schemas/User.schema.js';
+import { UserRoleSchema, SuperAdminSchema, TenantAdminSchema } from '../src/domain/schemas/UserRole.schema.js';
 import { OrganizationSchema } from '../src/domain/schemas/Organization.schema.js';
 import { TwilioPhoneNumberSchema } from '../src/domain/schemas/TwilioPhoneNumber.schema.js';
 import { CallSessionSchema } from '../src/domain/schemas/CallSession.schema.js';
@@ -115,8 +116,8 @@ describe('PostgreSQL Row-Level Security (RLS) Integration Tests', () => {
     const superOrm = await MikroORM.init({
       ...config,
       clientUrl: dbSuperUrl,
-      entities: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema, CallSessionSchema, CustomerSchema],
-      entitiesTs: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema, CallSessionSchema, CustomerSchema],
+      entities: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema, CallSessionSchema, CustomerSchema, UserRoleSchema, SuperAdminSchema, TenantAdminSchema],
+      entitiesTs: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema, CallSessionSchema, CustomerSchema, UserRoleSchema, SuperAdminSchema, TenantAdminSchema],
     });
 
     try {
@@ -166,15 +167,17 @@ describe('PostgreSQL Row-Level Security (RLS) Integration Tests', () => {
     orm = await MikroORM.init({
       ...config,
       clientUrl: workingUrl,
-      entities: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema, CallSessionSchema, CustomerSchema],
-      entitiesTs: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema, CallSessionSchema, CustomerSchema],
+      entities: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema, CallSessionSchema, CustomerSchema, UserRoleSchema, SuperAdminSchema, TenantAdminSchema],
+      entitiesTs: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema, CallSessionSchema, CustomerSchema, UserRoleSchema, SuperAdminSchema, TenantAdminSchema],
     });
 
     // 5. Seed Isolated Tenant A Data
     tenantA = Tenant.create('Tenant A - Acme Corp', '+15551002001');
     await tenantLocalStorage.run({ tenantId: tenantA.id }, async () => {
       await runInTenantTransaction(orm.em, async (txEm) => {
-        userA = User.create(tenantA, 'admin@acme.com', 'hashed_pwd_acme', 'admin');
+        const check = await txEm.execute("SELECT current_setting('app.current_tenant_id', true) as t_id");
+        console.log("Current Tenant ID setting:", check[0].t_id, "Expected:", tenantA.id);
+        userA = User.create(tenantA, 'admin@acme.com', 'hashed_pwd_acme');
         orgA = Organization.create(tenantA, 'Acme Engineering');
         const phoneA = TwilioPhoneNumber.create(tenantA, '+15125550100', 'Acme Hotline');
         sessionA = CallSession.create(tenantA, 'CA_RLS_TEST_ACME_001');
@@ -189,7 +192,7 @@ describe('PostgreSQL Row-Level Security (RLS) Integration Tests', () => {
     tenantB = Tenant.create('Tenant B - Stark Industries', '+15552003002');
     await tenantLocalStorage.run({ tenantId: tenantB.id }, async () => {
       await runInTenantTransaction(orm.em, async (txEm) => {
-        userB = User.create(tenantB, 'admin@stark.com', 'hashed_pwd_stark', 'admin');
+        userB = User.create(tenantB, 'admin@stark.com', 'hashed_pwd_stark');
         orgB = Organization.create(tenantB, 'Stark R&D');
         const phoneB = TwilioPhoneNumber.create(tenantB, '+15125550101', 'Stark Hotline');
         sessionB = CallSession.create(tenantB, 'CA_RLS_TEST_STARK_001');

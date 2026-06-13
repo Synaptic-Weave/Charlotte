@@ -10,6 +10,7 @@ import { User } from '../src/domain/entities/User.js';
 import { CallSession } from '../src/domain/entities/CallSession.js';
 import { TenantSchema } from '../src/domain/schemas/Tenant.schema.js';
 import { UserSchema } from '../src/domain/schemas/User.schema.js';
+import { UserRoleSchema, SuperAdminSchema, TenantAdminSchema } from '../src/domain/schemas/UserRole.schema.js';
 import { CallSessionSchema } from '../src/domain/schemas/CallSession.schema.js';
 import { OrganizationSchema } from '../src/domain/schemas/Organization.schema.js';
 import { TwilioPhoneNumberSchema } from '../src/domain/schemas/TwilioPhoneNumber.schema.js';
@@ -79,8 +80,8 @@ describe('Charlotte Calls & Transcript RLS Endpoint Integration Tests', () => {
     const superOrm = await MikroORM.init({
       ...config,
       clientUrl: dbSuperUrl,
-      entities: [TenantSchema, UserSchema, CallSessionSchema, OrganizationSchema, TwilioPhoneNumberSchema],
-      entitiesTs: [TenantSchema, UserSchema, CallSessionSchema, OrganizationSchema, TwilioPhoneNumberSchema],
+      entities: [TenantSchema, UserSchema, CallSessionSchema, OrganizationSchema, TwilioPhoneNumberSchema, UserRoleSchema, SuperAdminSchema, TenantAdminSchema],
+      entitiesTs: [TenantSchema, UserSchema, CallSessionSchema, OrganizationSchema, TwilioPhoneNumberSchema, UserRoleSchema, SuperAdminSchema, TenantAdminSchema],
     });
 
     try {
@@ -118,8 +119,8 @@ describe('Charlotte Calls & Transcript RLS Endpoint Integration Tests', () => {
     orm = await MikroORM.init({
       ...config,
       clientUrl: workingUrl,
-      entities: [TenantSchema, UserSchema, CallSessionSchema, OrganizationSchema, TwilioPhoneNumberSchema],
-      entitiesTs: [TenantSchema, UserSchema, CallSessionSchema, OrganizationSchema, TwilioPhoneNumberSchema],
+      entities: [TenantSchema, UserSchema, CallSessionSchema, OrganizationSchema, TwilioPhoneNumberSchema, UserRoleSchema, SuperAdminSchema, TenantAdminSchema],
+      entitiesTs: [TenantSchema, UserSchema, CallSessionSchema, OrganizationSchema, TwilioPhoneNumberSchema, UserRoleSchema, SuperAdminSchema, TenantAdminSchema],
     });
 
     // 4. Seed Isolated Tenant A & B Data
@@ -128,7 +129,7 @@ describe('Charlotte Calls & Transcript RLS Endpoint Integration Tests', () => {
 
     await tenantLocalStorage.run({ tenantId: tenantA.id }, async () => {
       await runInTenantTransaction(orm.em, async (txEm) => {
-        userA = User.create(tenantA, 'user-a@acme.com', 'hashed_pwd_a', 'admin');
+        userA = User.create(tenantA, 'user-a@acme.com', 'hashed_pwd_a');
         txEm.persist([tenantA, userA]);
         await txEm.flush();
       });
@@ -136,7 +137,7 @@ describe('Charlotte Calls & Transcript RLS Endpoint Integration Tests', () => {
 
     await tenantLocalStorage.run({ tenantId: tenantB.id }, async () => {
       await runInTenantTransaction(orm.em, async (txEm) => {
-        userB = User.create(tenantB, 'user-b@stark.com', 'hashed_pwd_b', 'admin');
+        userB = User.create(tenantB, 'user-b@stark.com', 'hashed_pwd_b');
         txEm.persist([tenantB, userB]);
         await txEm.flush();
       });

@@ -32,7 +32,7 @@ export interface DashboardClient {
 
 export const dashboardClients = new Set<DashboardClient>();
 
-export function broadcastDashboardUpdate(tenantId: string, payload: any): void {
+export function broadcastDashboardUpdate(tenantId: string, payload: unknown): void {
   const message = JSON.stringify(payload);
   console.log(`[WebSocket Broadcast] Broadcasting updates to tenant ${tenantId}. Payload:`, payload);
   for (const client of dashboardClients) {
@@ -98,7 +98,7 @@ export function registerStreamHandler(wss: WebSocketServer, em: EntityManager): 
     let streamSid: string | null = null;
     let callSid: string | null = null;
     let tenantId: string | null = null;
-    let geminiSession: any = null;
+    let geminiSession: unknown = null;
     let activeTenant: Tenant | null = null;
     let dialedNumber: string | null = null;
     let leftoverSamples: Int16Array = new Int16Array(0);
@@ -135,7 +135,7 @@ export function registerStreamHandler(wss: WebSocketServer, em: EntityManager): 
             await tenantLocalStorage.run({ tenantId }, async () => {
               await runInTenantTransaction(em, async (txEm) => {
                 // Fetch tenant info
-                activeTenant = await txEm.findOne(Tenant, { id: tenantId } as any);
+                activeTenant = await txEm.findOne(Tenant, { id: tenantId } as never);
                 if (!activeTenant) {
                   throw new Error(`Tenant with ID ${tenantId} not found.`);
                 }
@@ -193,7 +193,7 @@ export function registerStreamHandler(wss: WebSocketServer, em: EntityManager): 
                 geminiSession = await ai.live.connect({
                   model,
                   config: {
-                    responseModalities: ['AUDIO'] as any,
+                    responseModalities: ['AUDIO'] as never,
                     speechConfig: {
                       voiceConfig: {
                         prebuiltVoiceConfig: {
@@ -219,10 +219,10 @@ Never tell the caller to call another number or try another way; always use the 
                             name: 'transfer_call',
                             description: 'Route or transfer the call to a specific department or human agent.',
                             parameters: {
-                              type: 'OBJECT' as any,
+                              type: 'OBJECT' as never,
                               properties: {
                                 department: {
-                                  type: 'STRING' as any,
+                                  type: 'STRING' as never,
                                   description: 'The name of the department or human agent to transfer the call to (e.g. Sales, Support, Billing, Front Desk, or a specific employee name).',
                                 },
                               },
@@ -233,10 +233,10 @@ Never tell the caller to call another number or try another way; always use the 
                             name: 'query_crm',
                             description: 'Query the CRM for customer context using their phone number.',
                             parameters: {
-                              type: 'OBJECT' as any,
+                              type: 'OBJECT' as never,
                               properties: {
                                 phoneNumber: {
-                                  type: 'STRING' as any,
+                                  type: 'STRING' as never,
                                   description: 'The phone number of the customer to look up. It should include the country code (e.g. +1).',
                                 },
                               },
@@ -247,18 +247,18 @@ Never tell the caller to call another number or try another way; always use the 
                             name: 'book_appointment',
                             description: 'Book an appointment for a caller.',
                             parameters: {
-                              type: 'OBJECT' as any,
+                              type: 'OBJECT' as never,
                               properties: {
                                 customerId: {
-                                  type: 'STRING' as any,
+                                  type: 'STRING' as never,
                                   description: 'The UUID of the customer. You must query_crm first to get this.',
                                 },
                                 departmentName: {
-                                  type: 'STRING' as any,
+                                  type: 'STRING' as never,
                                   description: 'The name of the department.',
                                 },
                                 dateString: {
-                                  type: 'STRING' as any,
+                                  type: 'STRING' as never,
                                   description: 'The appointment date and time in ISO 8601 format.',
                                 },
                               },
@@ -269,14 +269,14 @@ Never tell the caller to call another number or try another way; always use the 
                         name: 'list_calendar_events',
                         description: 'List upcoming events from the Google Calendar to find free timeslots. Appointments are 60 minutes long, with a 15 minute buffer.',
                         parameters: {
-                          type: 'OBJECT' as any,
+                          type: 'OBJECT' as never,
                           properties: {
                             timeMin: {
-                              type: 'STRING' as any,
+                              type: 'STRING' as never,
                               description: 'The start date and time in ISO 8601 format.',
                             },
                             timeMax: {
-                              type: 'STRING' as any,
+                              type: 'STRING' as never,
                               description: 'The end date and time in ISO 8601 format.',
                             },
                           },
@@ -288,7 +288,7 @@ Never tell the caller to call another number or try another way; always use the 
                     ],
                   },
                   callbacks: {
-                    onmessage: async (serverMsg: any) => {
+                    onmessage: async (serverMsg: unknown) => {
                       try {
                         // Handle real-time audio transcriptions
                         const inputTx = serverMsg.serverContent?.inputTranscription;
@@ -423,7 +423,7 @@ Never tell the caller to call another number or try another way; always use the 
 
                         // 3. Handle tool/function calls from the model
                         const toolParts = serverMsg.serverContent?.modelTurn?.parts || [];
-                        const functionCalls = toolParts.map((p: any) => p.functionCall).filter(Boolean);
+                        const functionCalls = toolParts.map((p: unknown) => p.functionCall).filter(Boolean);
                         if (functionCalls.length > 0) {
                           for (const fn of functionCalls) {
                             if (fn.name === 'transfer_call') {
@@ -455,7 +455,7 @@ Never tell the caller to call another number or try another way; always use the 
                                       const { Department } = await import('../domain/entities/Department.js');
                                       const dept = await em.fork().findOne(Department, {
                                         tenant: activeTenant,
-                                        name: { $ilike: department } as any
+                                        name: { $ilike: department } as never
                                       });
                                       if (dept && dept.routingNumber) {
                                         targetNumber = dept.routingNumber;
@@ -482,7 +482,7 @@ Never tell the caller to call another number or try another way; always use the 
                                   const isSecure = req.headers['x-forwarded-proto'] === 'https';
                                   const protocol = isSecure ? 'https' : 'http';
                                   const apiBaseUrl = process.env.CHARLOTTE_API_BASE_URL || `${protocol}://${req.headers.host}`;
-                                  const fromNumber = dialedNumber || (activeTenant as any).phoneNumber || process.env.TWILIO_FROM_NUMBER || '';
+                                  const fromNumber = dialedNumber || (activeTenant as never).phoneNumber || process.env.TWILIO_FROM_NUMBER || '';
 
                                   // Support SIP URI routing if targetNumber starts with sip:
                                   let outboundTwiml = '';
@@ -578,7 +578,7 @@ Never tell the caller to call another number or try another way; always use the 
                                 } else {
                                   calResponse = '[]'; // No calendar connected, assume free
                                 }
-                              } catch (err: any) {
+                              } catch (err: unknown) {
                                 console.error('[Tool Call] Error executing list_calendar_events:', err);
                                 calResponse = 'Failed to fetch calendar events.';
                               }
@@ -604,7 +604,7 @@ Never tell the caller to call another number or try another way; always use the 
                                   const appointment = await appointmentSvc.bookAppointment(customerId, departmentName, dateString);
                                   bookResponse = `Appointment successfully booked for ${appointment.date} with ${departmentName}.`;
                                 });
-                              } catch (err: any) {
+                              } catch (err: unknown) {
                                 console.error('[Tool Call] Error executing book_appointment:', err);
                                 bookResponse = `Failed to book appointment: ${err.message}. Please ask for a new time.`;
                               }
@@ -628,10 +628,10 @@ Never tell the caller to call another number or try another way; always use the 
                         console.error('[Gemini] Error handling message:', err);
                       }
                     },
-                    onerror: (err: any) => {
+                    onerror: (err: unknown) => {
                       console.error('[Gemini] WebSocket error:', err);
                     },
-                    onclose: (e: any) => {
+                    onclose: (e: unknown) => {
                       console.log('[Gemini] Connection closed:', e);
                     },
                   },
