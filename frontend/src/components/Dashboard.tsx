@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  LayoutDashboard, PlusCircle, MessageSquare, Settings, LogOut, 
+  LayoutDashboard, PlusCircle, Settings, LogOut, 
   Phone, Award, Calendar, Volume2, UserCheck, Play
 } from 'lucide-react';
 import { TranscriptBox } from './TranscriptBox';
 import type { TranscriptMessage } from './TranscriptBox';
 import { NumberWizard } from './NumberWizard';
 import { Integrations } from './Integrations';
+import { AdminRoles } from './AdminRoles';
+import { AdminOverview } from './AdminOverview';
+import { AdminTenantsList } from './AdminTenantsList';
 
 interface TenantData {
   id: string;
@@ -33,8 +36,9 @@ interface CallLog {
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTenant, onSignOut }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'provision' | 'live' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'provision' | 'live' | 'settings' | 'admin'>('overview');
   const [currentTheme, setCurrentTheme] = useState<string>('');
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   
   // Tenant local configurations
   const [tenantName, setTenantName] = useState(tenant.name);
@@ -170,6 +174,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
   useEffect(() => {
     fetchCallLogs(true);
     fetchStats();
+
+    // Check if user is SuperAdmin by testing the roles endpoint
+    const checkSuperAdmin = async () => {
+      try {
+        const res = await fetch('/api/admin/roles', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          setIsSuperAdmin(true);
+        }
+      } catch (err) {
+        // fail silently
+      }
+    };
+    checkSuperAdmin();
   }, [token]);
 
   // Real-time WebSocket Updates
@@ -432,13 +451,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
             <span>Provision Hotline</span>
           </li>
           <li id="nav-live" className={`nav-item ${activeTab === 'live' ? 'active' : ''}`} onClick={() => setActiveTab('live')}>
-            <MessageSquare />
-            <span>Live Terminal</span>
+            <Play size={18} />
+            <span>Virtual Terminal</span>
           </li>
           <li id="nav-settings" className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>
-            <Settings />
-            <span>Agent Settings</span>
+            <Settings size={18} />
+            <span>Configuration</span>
           </li>
+          {isSuperAdmin && (
+            <li id="nav-admin" className={`nav-item ${activeTab === 'admin' ? 'active' : ''}`} onClick={() => setActiveTab('admin')} style={{ color: 'var(--danger)' }}>
+              <Award size={18} />
+              <span>Super Admin</span>
+            </li>
+          )}
         </ul>
 
         {/* PREMIUM THEME SWAPPER INSIDE SIDEBAR */}
@@ -857,6 +882,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
               <Integrations token={token} />
             </div>
 
+          </div>
+        )}
+
+        {/* 5. SUPER ADMIN VIEW */}
+        {activeTab === 'admin' && isSuperAdmin && (
+          <div style={{ animation: 'modalScaleUp 0.3s ease', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+            <AdminOverview token={token} />
+            <AdminTenantsList token={token} />
+            <AdminRoles token={token} />
           </div>
         )}
 
