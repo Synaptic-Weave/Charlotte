@@ -1,81 +1,29 @@
 import { Router } from 'express';
 import { EntityManager } from '@mikro-orm/postgresql';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import { Tenant } from '../domain/entities/Tenant.js';
 import { User } from '../domain/entities/User.js';
-import { TenantAdmin } from '../domain/entities/TenantAdmin.js';
-import { Organization } from '../domain/entities/Organization.js';
 import { tenantLocalStorage, runInTenantTransaction } from '../db/context.js';
 import { authenticateToken } from '../middleware/auth.js';
-
-import { requireEnv } from '../utils/env.js';
-
-const JWT_SECRET = requireEnv('JWT_SECRET');
+import { UserApplicationService } from '../services/UserApplicationService.js';
 
 export function createAuthRouter(em: EntityManager): Router {
   const router = Router();
+  const userService = new UserApplicationService(em);
 
   /**
    * POST /api/auth/signup
-   * Multi-Tenant Onboarding Endpoint
+   * Tenant Onboarding & Registration
    */
   router.post('/signup', async (req, res) => {
     try {
       const { email, password, tenantName, destinationNumber } = req.body;
 
       if (!email || !password || !tenantName || !destinationNumber) {
-        res.status(400).json({ error: 'Missing required onboarding parameters: email, password, tenantName, and destinationNumber are required.' });
+        res.status(400).json({ error: 'Missing required onboarding parameters.' });
         return;
       }
 
-      const fork = em.fork();
-      // Check if user already exists
-      const existingUser = await fork.findOne<User>(User, { email: email.toLowerCase().trim() } as any);
-      if (existingUser) {
-        res.status(400).json({ error: 'An account with this email already exists.' });
-        return;
-      }
-
-      // 1. Create a fresh Tenant entity (this generates a new UUID)
-      const tenant = Tenant.create(tenantName.trim(), destinationNumber.trim());
-
-      // 2. Hash user password
-      const passwordHash = await bcrypt.hash(password, 12);
-
-      // 3. Establish the thread-scoped tenant isolation context for RLS
-      const context = { tenantId: tenant.id };
-
-      let userId: string;
-      await tenantLocalStorage.run(context, async () => {
-        // 4. Run the persistence operations inside an atomic transaction enforcing RLS
-        await runInTenantTransaction(em, async (txEm) => {
-          // Persist the tenant
-          txEm.persist(tenant);
-
-          // Create and persist the user
-          const tenantAdminRole = new TenantAdmin();
-          txEm.persist(tenantAdminRole);
-          const user = User.create(tenant, email.toLowerCase().trim(), passwordHash, tenantAdminRole);
-          txEm.persist(user);
-          userId = user.id;
-
-          // Create and persist the organization
-          const org = Organization.create(tenant, tenantName.trim());
-          txEm.persist(org);
-        });
-      });
-
-      // Generate credentials token for instant session onboarding
-      const token = jwt.sign(
-        {
-          tenantId: tenant.id,
-          userId: userId!,
-          role: 'tenant_admin'
-        },
-        JWT_SECRET,
-        { expiresIn: '24h' }
-      );
+      const { token, tenant } = await userService.registerOnboarding(email, password, tenantName, destinationNumber);
 
       res.status(201).json({
         message: 'Onboarding registration completed successfully.',
@@ -89,7 +37,8 @@ export function createAuthRouter(em: EntityManager): Router {
       });
     } catch (error: any) {
       console.error('Error during onboarding registration:', error);
-      res.status(500).json({ error: 'Internal server error occurred during tenant onboarding.' });
+      const status = error.status || 500;
+      res.status(status).json({ error: error.message || 'Internal server error occurred during tenant onboarding.' });
     }
   });
 
@@ -106,31 +55,7 @@ export function createAuthRouter(em: EntityManager): Router {
         return;
       }
 
-      const fork = em.fork();
-      // Find user globally (emails are unique across the app)
-      const user = await fork.findOne<User>(User, { email: email.toLowerCase().trim() } as any, { populate: ['tenant'] as any });
-      if (!user) {
-        res.status(401).json({ error: 'Invalid email or password credentials.' });
-        return;
-      }
-
-      // Match password credentials
-      const matches = await bcrypt.compare(password, user.passwordHash);
-      if (!matches) {
-        res.status(401).json({ error: 'Invalid email or password credentials.' });
-        return;
-      }
-
-      // Build active JWT Bearer Token
-      const token = jwt.sign(
-        {
-          tenantId: user.tenant.id,
-          userId: user.id,
-          role: (user.role as any)?.type || 'tenant_admin'
-        },
-        JWT_SECRET,
-        { expiresIn: '24h' }
-      );
+      const { token, user } = await userService.authenticateUser(email, password);
 
       res.status(200).json({
         message: 'Authentication successful.',
@@ -144,7 +69,8 @@ export function createAuthRouter(em: EntityManager): Router {
       });
     } catch (error: any) {
       console.error('Error during login authentication:', error);
-      res.status(500).json({ error: 'Internal server error occurred during login.' });
+      const status = error.status || 500;
+      res.status(status).json({ error: error.message || 'Internal server error occurred during login.' });
     }
   });
 
@@ -208,7 +134,7 @@ export function createAuthRouter(em: EntityManager): Router {
         if (!tenant) throw new Error('Tenant not found.');
         
         const userId = req.context?.userId;
-        const user = await txEm.findOne<User>(User, { id: userId } as any);
+        const user = await txEm.findOne<User>(User, { id: userId } as any, { populate: ['role'] as any });
         return { tenant, user };
       });
 
@@ -222,7 +148,7 @@ export function createAuthRouter(em: EntityManager): Router {
         user: result.user ? {
           id: result.user.id,
           email: result.user.email,
-          role: result.user.role
+          role: result.user.role ? (result.user.role as any).type : null
         } : null
       });
     } catch (error: any) {

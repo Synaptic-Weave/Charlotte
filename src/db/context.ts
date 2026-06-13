@@ -44,3 +44,24 @@ export async function runInTenantTransaction<T>(
     return await callback(txEm);
   });
 }
+
+/**
+ * Runs a query block inside a PostgreSQL transaction where RLS is disabled.
+ * This should only be used by system administrators or background workers
+ * that need cross-tenant access.
+ *
+ * @param em The root EntityManager instance
+ * @param callback The database operations to perform inside the transaction
+ */
+export async function runInGlobalTransaction<T>(
+  em: EntityManager,
+  callback: (forkedEm: EntityManager) => Promise<T>
+): Promise<T> {
+  const fork = em.fork();
+
+  return await fork.transactional(async (txEm) => {
+    // Disable RLS for this transaction (requires SUPERUSER or BYPASSRLS privilege)
+    await txEm.execute('SET LOCAL row_security = OFF');
+    return await callback(txEm);
+  });
+}
