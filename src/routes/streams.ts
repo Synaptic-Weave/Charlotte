@@ -4,7 +4,7 @@ import { EntityManager } from '@mikro-orm/postgresql';
 import twilio from 'twilio';
 // Uses the Google GenAI SDK directly for Gemini Live voice streaming.
 // TODO: migrate to @google/adk once ADK supports real-time audio bidirectional streaming.
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, LiveServerMessage } from '@google/genai';
 import jwt from 'jsonwebtoken';
 import { Tenant } from '../domain/entities/Tenant.js';
 import { CallSession } from '../domain/entities/CallSession.js';
@@ -288,7 +288,7 @@ Never tell the caller to call another number or try another way; always use the 
                     ],
                   },
                   callbacks: {
-                    onmessage: async (serverMsg: any) => {
+                    onmessage: async (serverMsg: LiveServerMessage) => {
                       try {
                         // Handle real-time audio transcriptions
                         const inputTx = serverMsg.serverContent?.inputTranscription;
@@ -516,7 +516,7 @@ Never tell the caller to call another number or try another way; always use the 
                                 console.log(`[Twilio Mock] Warm transfer for Call ${callSid} to ${activeTenant?.destinationNumber || 'destination'} requested (mock mode).`);
                               }
                             } else if (fn.name === 'query_crm') {
-                              const { phoneNumber } = fn.args;
+                              const { phoneNumber } = fn.args as any;
                               console.log(`[Tool Call] Model triggered query_crm for: ${phoneNumber}`);
                               
                               let crmResponse = 'No customer found with that phone number.';
@@ -547,7 +547,7 @@ Never tell the caller to call another number or try another way; always use the 
                                 ],
                               });
                             } else if (fn.name === 'list_calendar_events') {
-                              const { timeMin, timeMax } = fn.args;
+                              const { timeMin, timeMax } = fn.args as any;
                               console.log(`[Tool Call] Model triggered list_calendar_events: ${timeMin} to ${timeMax}`);
                               let calResponse = '';
                               try {
@@ -592,7 +592,7 @@ Never tell the caller to call another number or try another way; always use the 
                                 ],
                               });
                             } else if (fn.name === 'book_appointment') {
-                              const { customerId, departmentName, dateString } = fn.args;
+                              const { customerId, departmentName, dateString } = fn.args as any;
                               console.log(`[Tool Call] Model triggered book_appointment for: ${customerId}, ${departmentName}, ${dateString}`);
                               
                               let bookResponse = '';

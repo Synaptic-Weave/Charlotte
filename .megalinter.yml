@@ -22,6 +22,7 @@ ENABLE_LINTERS:
   - JSON_JSONLINT                   # JSON syntax validation
   - SPELL_CSPELL                    # Spell checking with project dictionary
   - REPOSITORY_CHECKOV              # Terraform IaC security checks
+  - TYPESCRIPT_ESLINT               # Strict TypeScript typing and linting
 
 # ─── Markdown ────────────────────────────────────────────────────────────────
 # markdownlint has style warnings in spec files — treat as advisory only
