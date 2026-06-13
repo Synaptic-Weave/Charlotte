@@ -10,6 +10,7 @@ import { Integrations } from './Integrations';
 import { AdminRoles } from './AdminRoles';
 import { AdminOverview } from './AdminOverview';
 import { AdminTenantsList } from './AdminTenantsList';
+import { AdminLogs } from './AdminLogs';
 
 interface TenantData {
   id: string;
@@ -891,6 +892,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
             <AdminOverview token={token} />
             <AdminTenantsList token={token} />
             <AdminRoles token={token} />
+            <AdminLogs token={token} />
           </div>
         )}
 

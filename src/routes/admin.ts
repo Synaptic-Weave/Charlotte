@@ -6,6 +6,7 @@ import { createAdminRolesRouter } from './admin/roles.js';
 import { createAdminStatsRouter } from './admin/stats.js';
 import { createAdminCallsRouter } from './admin/calls.js';
 import { createAdminTenantsRouter } from './admin/tenants.js';
+import { createAdminLogsRouter } from './admin/logs.js';
 
 export function createAdminRouter(em: EntityManager): Router {
   const router = Router();
@@ -26,6 +27,7 @@ export function createAdminRouter(em: EntityManager): Router {
   router.use('/stats', createAdminStatsRouter(em));
   router.use('/calls', createAdminCallsRouter(em));
   router.use('/tenants', createAdminTenantsRouter(em));
+  router.use('/logs', createAdminLogsRouter(em));
 
   return router;
 }

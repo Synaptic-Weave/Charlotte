@@ -336,6 +336,12 @@ resource "google_secret_manager_secret_iam_member" "backend_secrets_accessor" {
   project   = var.project_id
 }
 
+resource "google_project_iam_member" "backend_logging_viewer" {
+  project = var.project_id
+  role    = "roles/logging.viewer"
+  member  = "serviceAccount:${google_service_account.backend_sa.email}"
+}
+
 # -------------------------------------------------------------------------
 # 6. Cloud Run Backend Service
 # -------------------------------------------------------------------------

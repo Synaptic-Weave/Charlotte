@@ -26,6 +26,7 @@
     "node": ">=24.0.0"
   },
   "dependencies": {
+    "@google-cloud/logging": "^11.2.2",
     "@google/genai": "^2.8.0",
     "@mikro-orm/cli": "^6.2.8",
     "@mikro-orm/core": "^6.2.8",
