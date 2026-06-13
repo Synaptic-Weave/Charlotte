@@ -8,6 +8,7 @@ import { Department } from '../src/domain/entities/Department.js';
 import { Customer } from '../src/domain/entities/Customer.js';
 import { TenantSchema } from '../src/domain/schemas/Tenant.schema.js';
 import { UserSchema } from '../src/domain/schemas/User.schema.js';
+import { UserRoleSchema, SuperAdminSchema, TenantAdminSchema } from '../src/domain/schemas/UserRole.schema.js';
 import { OrganizationSchema } from '../src/domain/schemas/Organization.schema.js';
 import { CustomerSchema } from '../src/domain/schemas/Customer.schema.js';
 import { DepartmentSchema } from '../src/domain/schemas/Department.schema.js';
@@ -26,8 +27,8 @@ describe('AppointmentService', () => {
   beforeAll(async () => {
     orm = await MikroORM.init({
       ...config,
-      entities: [TenantSchema, UserSchema, OrganizationSchema, CustomerSchema, DepartmentSchema, AppointmentSchema],
-      entitiesTs: [TenantSchema, UserSchema, OrganizationSchema, CustomerSchema, DepartmentSchema, AppointmentSchema],
+      entities: [TenantSchema, UserSchema, OrganizationSchema, CustomerSchema, DepartmentSchema, AppointmentSchema, UserRoleSchema, SuperAdminSchema, TenantAdminSchema],
+      entitiesTs: [TenantSchema, UserSchema, OrganizationSchema, CustomerSchema, DepartmentSchema, AppointmentSchema, UserRoleSchema, SuperAdminSchema, TenantAdminSchema],
       allowGlobalContext: true,
     });
 

@@ -1,4 +1,3 @@
-import { ManyToOne } from '@mikro-orm/core';
 import { UserRole } from './UserRole.js';
 import { v4 as uuidv4 } from 'uuid';
 import { Tenant } from './Tenant.js';
@@ -8,7 +7,6 @@ export class User {
   tenant: Tenant;
   email: string;
   passwordHash: string;
-  @ManyToOne(() => UserRole, { nullable: true })
   role?: UserRole | null;
   readonly createdAt: Date;
   updatedAt: Date;

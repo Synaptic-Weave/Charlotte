@@ -10,6 +10,7 @@ import { TwilioPhoneNumber } from '../src/domain/entities/TwilioPhoneNumber.js';
 import { CallSession } from '../src/domain/entities/CallSession.js';
 import { TenantSchema } from '../src/domain/schemas/Tenant.schema.js';
 import { UserSchema } from '../src/domain/schemas/User.schema.js';
+import { UserRoleSchema, SuperAdminSchema, TenantAdminSchema } from '../src/domain/schemas/UserRole.schema.js';
 import { OrganizationSchema } from '../src/domain/schemas/Organization.schema.js';
 import { TwilioPhoneNumberSchema } from '../src/domain/schemas/TwilioPhoneNumber.schema.js';
 import { CallSessionSchema } from '../src/domain/schemas/CallSession.schema.js';
@@ -142,8 +143,8 @@ describe('Charlotte Warm Transfer & Call Bridging Integration Tests', () => {
     orm = await MikroORM.init({
       ...config,
       clientUrl: dbUrl,
-      entities: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema, CallSessionSchema],
-      entitiesTs: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema, CallSessionSchema],
+      entities: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema, CallSessionSchema, UserRoleSchema, SuperAdminSchema, TenantAdminSchema],
+      entitiesTs: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema, CallSessionSchema, UserRoleSchema, SuperAdminSchema, TenantAdminSchema],
     });
 
     await orm.getMigrator().up();

@@ -126,7 +126,7 @@ export function createAuthRouter(em: EntityManager): Router {
         {
           tenantId: user.tenant.id,
           userId: user.id,
-          role: (user.role as any).type || 'tenant_admin'
+          role: (user.role as any)?.type || 'tenant_admin'
         },
         JWT_SECRET,
         { expiresIn: '24h' }

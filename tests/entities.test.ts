@@ -7,6 +7,7 @@ import { Organization } from '../src/domain/entities/Organization.js';
 import { Customer } from '../src/domain/entities/Customer.js';
 import { TenantSchema } from '../src/domain/schemas/Tenant.schema.js';
 import { UserSchema } from '../src/domain/schemas/User.schema.js';
+import { UserRoleSchema, SuperAdminSchema, TenantAdminSchema } from '../src/domain/schemas/UserRole.schema.js';
 import { OrganizationSchema } from '../src/domain/schemas/Organization.schema.js';
 import { CustomerSchema } from '../src/domain/schemas/Customer.schema.js';
 
@@ -17,8 +18,8 @@ describe('Domain Entities and Companion Schemas', () => {
     // Initialize ORM without connecting to database to discover metadata
     orm = await MikroORM.init({
       ...config,
-      entities: [TenantSchema, UserSchema, OrganizationSchema, CustomerSchema],
-      entitiesTs: [TenantSchema, UserSchema, OrganizationSchema, CustomerSchema],
+      entities: [TenantSchema, UserSchema, OrganizationSchema, CustomerSchema, UserRoleSchema, SuperAdminSchema, TenantAdminSchema],
+      entitiesTs: [TenantSchema, UserSchema, OrganizationSchema, CustomerSchema, UserRoleSchema, SuperAdminSchema, TenantAdminSchema],
       connect: false,
     });
   });
@@ -68,13 +69,12 @@ describe('Domain Entities and Companion Schemas', () => {
 
   it('should instantiate User via static factory method', () => {
     const tenant = Tenant.create('Acme Corp', '+15551234567');
-    const user = User.create(tenant, 'test@example.com', 'hashed_pwd', 'admin');
+    const user = User.create(tenant, 'test@example.com', 'hashed_pwd');
     expect(user).toBeInstanceOf(User);
     expect(user.id).toBeDefined();
     expect(user.tenant).toBe(tenant);
     expect(user.email).toBe('test@example.com');
     expect(user.passwordHash).toBe('hashed_pwd');
-    expect(user.role).toBe('admin');
     expect(user.createdAt).toBeInstanceOf(Date);
     expect(user.updatedAt).toBeInstanceOf(Date);
   });
