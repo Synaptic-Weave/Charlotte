@@ -11,6 +11,7 @@ import { createNumbersRouter } from './routes/numbers.js';
 import { createWebhooksRouter } from './routes/webhooks.js';
 import { createCallsRouter } from './routes/calls.js';
 import { createIntegrationsRouter } from './routes/integrations.js';
+import { createAdminRouter } from './routes/admin.js';
 import { registerStreamHandler } from './routes/streams.js';
 
 const PORT = Number(process.env.PORT || 8080);
@@ -54,6 +55,7 @@ async function bootstrap() {
   app.use('/api/webhook', createWebhooksRouter(orm.em));
   app.use('/api/tenants/calls', createCallsRouter(orm.em));
   app.use('/api/integrations', createIntegrationsRouter(orm.em));
+  app.use('/api/admin', createAdminRouter(orm.em));
 
   // Serve static files from the React frontend build folder if it exists
   const frontendDistPath = path.resolve(__dirname, '../frontend/dist');

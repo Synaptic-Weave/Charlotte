@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, PlusCircle, MessageSquare, Settings, LogOut, 
-  Phone, Award, Calendar, Volume2, UserCheck, Play
+  Phone, Award, Calendar, Volume2, UserCheck, Play, Activity
 } from 'lucide-react';
+import { AdminOverview } from './AdminOverview';
 import { TranscriptBox } from './TranscriptBox';
 import type { TranscriptMessage } from './TranscriptBox';
 import { NumberWizard } from './NumberWizard';
@@ -33,7 +34,7 @@ interface CallLog {
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTenant, onSignOut }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'provision' | 'live' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'provision' | 'live' | 'settings' | 'admin'>('overview');
   const [currentTheme, setCurrentTheme] = useState<string>('');
   
   // Tenant local configurations
@@ -441,6 +442,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
           </li>
         </ul>
 
+        <div style={{ marginTop: 'auto', marginBottom: '1rem' }}>
+          <p style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem', paddingLeft: '1rem' }}>
+            System Administration
+          </p>
+          <ul className="nav-menu">
+            <li id="nav-admin" className={`nav-item ${activeTab === 'admin' ? 'active' : ''}`} onClick={() => setActiveTab('admin')}>
+              <Activity />
+              <span>Global Metrics</span>
+            </li>
+          </ul>
+        </div>
+
         {/* PREMIUM THEME SWAPPER INSIDE SIDEBAR */}
         <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--card-border)' }}>
           <p style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem' }}>
@@ -508,6 +521,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
               {activeTab === 'provision' && 'Provisioning Portal'}
               {activeTab === 'live' && 'Active Virtual Terminal'}
               {activeTab === 'settings' && 'AI Agent Settings'}
+              {activeTab === 'admin' && 'Global System Metrics'}
             </h1>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
               Isolated Workspace Environment: <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{tenantName}</span>
@@ -858,6 +872,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, tenant, onUpdateTen
             </div>
 
           </div>
+        )}
+
+        {/* 5. ADMIN VIEW */}
+        {activeTab === 'admin' && (
+          <AdminOverview token={token} />
         )}
 
       </main>
