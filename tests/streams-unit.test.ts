@@ -148,14 +148,18 @@ describe('Streams Route - Tool Calls', () => {
 
     // 4. Simulate list_calendar_events tool call from AI
     await onmessage({
-      toolCall: {
-        functionCalls: [
-          {
-            name: 'list_calendar_events',
-            id: 'call-id-123',
-            args: { timeMin: '2026-06-12T00:00:00Z', timeMax: '2026-06-13T00:00:00Z' }
-          }
-        ]
+      serverContent: {
+        modelTurn: {
+          parts: [
+            {
+              functionCall: {
+                name: 'list_calendar_events',
+                id: 'call-id-123',
+                args: { timeMin: '2026-06-12T00:00:00Z', timeMax: '2026-06-13T00:00:00Z' }
+              }
+            }
+          ]
+        }
       }
     });
 
