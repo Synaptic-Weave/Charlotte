@@ -103,6 +103,7 @@ export function registerStreamHandler(wss: WebSocketServer, em: EntityManager): 
     let dialedNumber: string | null = null;
     let leftoverSamples: Int16Array = new Int16Array(0);
     let outboundTransferCallSid: string | null = null;
+    let isTransferring = false;
 
     ws.on('message', async (message: RawData) => {
       try {
@@ -421,12 +422,14 @@ Never tell the caller to call another number or try another way; always use the 
                         }
 
                         // 3. Handle tool/function calls from the model
-                        const functionCalls = serverMsg.toolCall?.functionCalls;
-                        if (functionCalls) {
+                        const toolParts = serverMsg.serverContent?.modelTurn?.parts || [];
+                        const functionCalls = toolParts.map((p: any) => p.functionCall).filter(Boolean);
+                        if (functionCalls.length > 0) {
                           for (const fn of functionCalls) {
                             if (fn.name === 'transfer_call') {
                               const { department } = fn.args as { department: string };
                               console.log(`[Tool Call] Model triggered transfer_call to: ${department}`);
+                              isTransferring = true;
 
                               // Acknowledge tool execution back to Gemini
                               await geminiSession.sendToolResponse({
@@ -675,12 +678,12 @@ Never tell the caller to call another number or try another way; always use the 
               const base64MuLaw = msg.media.payload;
               const geminiPayload = transcodeTwilioToGemini(base64MuLaw);
 
-              await geminiSession.sendRealtimeInput({
-                media: {
+              await geminiSession.sendRealtimeInput([{
+                audio: {
                   data: geminiPayload,
                   mimeType: 'audio/pcm;rate=16000',
                 },
-              });
+              }]);
             }
             break;
           }
@@ -698,8 +701,8 @@ Never tell the caller to call another number or try another way; always use the 
     ws.on('close', async (code: number, reason: string) => {
       console.log(`[WebSocket] Twilio Stream closed. Code: ${code}, Reason: ${reason}`);
 
-      // Terminate outbound transfer call if it exists
-      if (outboundTransferCallSid && twilioClient) {
+      // Terminate outbound transfer call if it exists and we are not transferring
+      if (outboundTransferCallSid && twilioClient && !isTransferring) {
         try {
           console.log(`[Twilio REST] Inbound dropped, terminating active outbound transfer call ${outboundTransferCallSid}...`);
           await twilioClient.calls(outboundTransferCallSid).update({ status: 'completed' });
