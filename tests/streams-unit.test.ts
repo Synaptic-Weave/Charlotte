@@ -148,18 +148,14 @@ describe('Streams Route - Tool Calls', () => {
 
     // 4. Simulate list_calendar_events tool call from AI
     await onmessage({
-      serverContent: {
-        modelTurn: {
-          parts: [
-            {
-              functionCall: {
-                name: 'list_calendar_events',
-                id: 'call-id-123',
-                args: { timeMin: '2026-06-12T00:00:00Z', timeMax: '2026-06-13T00:00:00Z' }
-              }
-            }
-          ]
-        }
+      toolCall: {
+        functionCalls: [
+          {
+            name: 'list_calendar_events',
+            id: 'call-id-123',
+            args: { timeMin: '2026-06-12T00:00:00Z', timeMax: '2026-06-13T00:00:00Z' }
+          }
+        ]
       }
     });
 
@@ -192,18 +188,14 @@ describe('Streams Route - Tool Calls', () => {
     const onmessage = mockConnect.config.callbacks.onmessage;
 
     await onmessage({
-      serverContent: {
-        modelTurn: {
-          parts: [
-            {
-              functionCall: {
-                name: 'query_crm',
-                id: 'call-id-124',
-                args: { phoneNumber: '+15551234567' }
-              }
-            }
-          ]
-        }
+      toolCall: {
+        functionCalls: [
+          {
+            name: 'query_crm',
+            id: 'call-id-124',
+            args: { phoneNumber: '+15551234567' }
+          }
+        ]
       }
     });
 
@@ -236,18 +228,14 @@ describe('Streams Route - Tool Calls', () => {
     const onmessage = mockConnect.config.callbacks.onmessage;
 
     await onmessage({
-      serverContent: {
-        modelTurn: {
-          parts: [
-            {
-              functionCall: {
-                name: 'book_appointment',
-                id: 'call-id-125',
-                args: { customerId: 'cust-1', departmentName: 'Sales', dateString: '2026-06-12T10:00:00Z' }
-              }
-            }
-          ]
-        }
+      toolCall: {
+        functionCalls: [
+          {
+            name: 'book_appointment',
+            id: 'call-id-125',
+            args: { customerId: 'cust-1', departmentName: 'Sales', dateString: '2026-06-12T10:00:00Z' }
+          }
+        ]
       }
     });
 

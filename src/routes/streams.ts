@@ -422,8 +422,7 @@ Never tell the caller to call another number or try another way; always use the 
                         }
 
                         // 3. Handle tool/function calls from the model
-                        const toolParts = serverMsg.serverContent?.modelTurn?.parts || [];
-                        const functionCalls = toolParts.map((p: any) => p.functionCall).filter(Boolean);
+                        const functionCalls = serverMsg.toolCall?.functionCalls || [];
                         if (functionCalls.length > 0) {
                           for (const fn of functionCalls) {
                             if (fn.name === 'transfer_call') {
