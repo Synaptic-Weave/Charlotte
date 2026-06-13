@@ -14,6 +14,8 @@ import { createIntegrationsRouter } from './routes/integrations.js';
 import { registerStreamHandler } from './routes/streams.js';
 import { createAdminRolesRouter } from './routes/admin/roles.js';
 import { adminAuth } from './middlewares/adminAuth.js';
+import { UserApplicationService } from './services/UserApplicationService.js';
+import { AdminService } from './services/AdminService.js';
 
 
 const PORT = Number(process.env.PORT || 8080);
@@ -51,9 +53,13 @@ async function bootstrap() {
     });
   });
 
+  // Services
+  const userService = new UserApplicationService(orm.em);
+  const adminService = new AdminService(orm.em);
+
   // Register routes
-  app.use('/api/auth', createAuthRouter(orm.em));
-  app.use('/api/admin/roles', adminAuth, createAdminRolesRouter(orm.em));
+  app.use('/api/auth', createAuthRouter(userService));
+  app.use('/api/admin/roles', adminAuth, createAdminRolesRouter(adminService));
 
   app.use('/api/tenants/numbers', createNumbersRouter(orm.em));
   app.use('/api/webhook', createWebhooksRouter(orm.em));

@@ -18,15 +18,19 @@ export class AdminService {
     });
   }
 
-  async assignRole(userId: string, roleId: string): Promise<void> {
+  async listRoles(): Promise<Record<string, unknown>[]> {
+    return this.listAllUsersGlobally();
+  }
+
+  async assignRole(data: { email: string; roleType: string }): Promise<void> {
     await runInGlobalTransaction(this.em, async (txEm) => {
-      const user = await txEm.findOne(User, { id: userId });
+      const user = await txEm.findOne(User, { email: data.email });
       if (!user) {
-        throw Object.assign(new Error('User not found'), { status: 404 });
+        throw Object.assign(new Error('User not found.'), { status: 404 });
       }
-      const role = await txEm.findOne(UserRole, { id: roleId });
+      const role = await txEm.findOne(UserRole, { type: data.roleType });
       if (!role) {
-        throw Object.assign(new Error('Role not found'), { status: 404 });
+        throw Object.assign(new Error('Role not found.'), { status: 404 });
       }
       
       user.updateRole(role);

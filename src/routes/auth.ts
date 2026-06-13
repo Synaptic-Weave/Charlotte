@@ -39,7 +39,12 @@ export function createAuthRouter(userService: UserApplicationService): Router {
         return;
       }
 
-      const result = await userService.createUser(parseResult.data);
+      const result = await userService.registerOnboarding(
+        parseResult.data.email,
+        parseResult.data.password,
+        parseResult.data.tenantName,
+        parseResult.data.destinationNumber
+      );
       res.status(201).json({
         message: 'Onboarding registration completed successfully.',
         ...result
@@ -63,7 +68,7 @@ export function createAuthRouter(userService: UserApplicationService): Router {
         return;
       }
 
-      const result = await userService.authenticateUser(parseResult.data);
+      const result = await userService.authenticateUser(parseResult.data.email, parseResult.data.password);
       res.status(200).json({
         message: 'Authentication successful.',
         ...result

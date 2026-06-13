@@ -18,7 +18,11 @@ export function createAdminRolesRouter(adminService: AdminService): Router {
     try {
       const parseResult = assignRoleSchema.safeParse(req.body);
       if (!parseResult.success) {
-        res.status(400).json({ error: 'Valid email and roleType (super_admin or tenant_admin) are required.' });
+        if (!req.body.email || !req.body.roleType) {
+          res.status(400).json({ error: 'Email and roleType are required.' });
+        } else {
+          res.status(400).json({ error: 'Invalid roleType.' });
+        }
         return;
       }
 

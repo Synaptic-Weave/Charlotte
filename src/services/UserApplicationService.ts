@@ -38,7 +38,7 @@ export class UserApplicationService {
       { expiresIn: '24h' }
     );
 
-    return { token, user };
+    return { token, user, tenant: user.tenant };
   }
 
   async registerOnboarding(
@@ -96,6 +96,55 @@ export class UserApplicationService {
   async listUsers(): Promise<User[]> {
     return await runInTenantTransaction(this.em, async (txEm) => {
       return await txEm.find(User, {}, { populate: ['role'] as never });
+    });
+  }
+
+  async verifyDestination(tenantId: string, pin: string): Promise<Tenant> {
+    return await runInTenantTransaction(this.em, async (txEm) => {
+      const tenant = await txEm.findOne(Tenant, { id: tenantId });
+      if (!tenant) throw Object.assign(new Error('Tenant not found.'), { status: 404 });
+      if (pin !== '1234') {
+        throw Object.assign(new Error('Incorrect verification PIN.'), { status: 400 });
+      }
+      tenant.updateDestination(tenant.destinationNumber, true);
+      await txEm.flush();
+      return tenant;
+    });
+  }
+
+  async getSettings(tenantId: string, userId: string): Promise<{ tenant: Partial<Tenant>; user: Partial<User> }> {
+    return await runInTenantTransaction(this.em, async (txEm) => {
+      const tenant = await txEm.findOne(Tenant, { id: tenantId });
+      const user = await txEm.findOne(User, { id: userId }, { populate: ['role'] as never });
+      if (!tenant || !user) throw Object.assign(new Error('Not found.'), { status: 404 });
+
+      return {
+        tenant: {
+          id: tenant.id,
+          name: tenant.name,
+          destinationNumber: tenant.destinationNumber,
+          destinationVerified: tenant.destinationVerified
+        },
+        user: {
+          id: user.id,
+          email: user.email,
+          role: user.role ? (user.role as never).type : null
+        }
+      };
+    });
+  }
+
+  async updateSettings(tenantId: string, data: { name: string; destinationNumber: string }): Promise<Tenant> {
+    return await runInTenantTransaction(this.em, async (txEm) => {
+      const tenant = await txEm.findOne(Tenant, { id: tenantId });
+      if (!tenant) throw Object.assign(new Error('Tenant not found.'), { status: 404 });
+
+      const numberChanged = tenant.destinationNumber !== data.destinationNumber.trim();
+      tenant.updateName(data.name.trim());
+      tenant.updateDestination(data.destinationNumber.trim(), !numberChanged ? tenant.destinationVerified : false);
+      
+      await txEm.flush();
+      return tenant;
     });
   }
 }

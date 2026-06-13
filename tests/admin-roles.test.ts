@@ -16,6 +16,7 @@ import { TenantSchema } from '../src/domain/schemas/Tenant.schema.js';
 import { UserSchema } from '../src/domain/schemas/User.schema.js';
 import { createAdminRolesRouter } from '../src/routes/admin/roles.js';
 import { adminAuth } from '../src/middlewares/adminAuth.js';
+import { AdminService } from '../src/services/AdminService.js';
 import { tenantLocalStorage, runInTenantTransaction } from '../src/db/context.js';
 import { OrganizationSchema } from '../src/domain/schemas/Organization.schema.js';
 import { CallSessionSchema } from '../src/domain/schemas/CallSession.schema.js';
@@ -102,7 +103,8 @@ describe('Admin Roles API Integration Tests', () => {
         
         userSuperAdmin = User.create(tenantA, 'super@acme.com', 'hashed_pwd_2');
         const superRole = new SuperAdmin();
-        txEm.persist(superRole);
+        const tenantRole = new TenantAdmin();
+        txEm.persist([superRole, tenantRole]);
         userSuperAdmin.updateRole(superRole);
         
         userTarget = User.create(tenantA, 'target@acme.com', 'hashed_pwd_3');
@@ -126,7 +128,8 @@ describe('Admin Roles API Integration Tests', () => {
 
     const app = express();
     app.use(express.json());
-    app.use('/api/admin/roles', adminAuth, createAdminRolesRouter(orm.em));
+    const adminService = new AdminService(orm.em);
+    app.use('/api/admin/roles', adminAuth, createAdminRolesRouter(adminService));
 
     server = http.createServer(app);
     await new Promise<void>((resolve) => server.listen(0, () => resolve()));
