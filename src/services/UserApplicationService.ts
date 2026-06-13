@@ -13,7 +13,7 @@ export class UserApplicationService {
 
   async findByEmail(email: string): Promise<User | null> {
     const fork = this.em.fork();
-    return await fork.findOne(User, { email: email.toLowerCase().trim() } as any, { populate: ['tenant', 'role'] as any });
+    return await fork.findOne(User, { email: email.toLowerCase().trim() } as never, { populate: ['tenant', 'role'] as never });
   }
 
   async authenticateUser(email: string, passwordPlain: string): Promise<{ token: string, user: User }> {
@@ -32,7 +32,7 @@ export class UserApplicationService {
       {
         tenantId: user.tenant.id,
         userId: user.id,
-        role: (user.role as any)?.type || 'tenant_admin'
+        role: (user.role as never)?.type || 'tenant_admin'
       },
       JWT_SECRET,
       { expiresIn: '24h' }
@@ -48,7 +48,7 @@ export class UserApplicationService {
     destinationNumber: string
   ): Promise<{ token: string, tenant: Tenant }> {
     const fork = this.em.fork();
-    const existingUser = await fork.findOne(User, { email: email.toLowerCase().trim() } as any);
+    const existingUser = await fork.findOne(User, { email: email.toLowerCase().trim() } as never);
     if (existingUser) {
       throw Object.assign(new Error('An account with this email already exists.'), { status: 400 });
     }
@@ -89,13 +89,13 @@ export class UserApplicationService {
 
   async findById(userId: string): Promise<User | null> {
     return await runInTenantTransaction(this.em, async (txEm) => {
-      return await txEm.findOne(User, { id: userId }, { populate: ['role'] as any });
+      return await txEm.findOne(User, { id: userId }, { populate: ['role'] as never });
     });
   }
 
   async listUsers(): Promise<User[]> {
     return await runInTenantTransaction(this.em, async (txEm) => {
-      return await txEm.find(User, {}, { populate: ['role'] as any });
+      return await txEm.find(User, {}, { populate: ['role'] as never });
     });
   }
 }

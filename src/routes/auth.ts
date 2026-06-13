@@ -1,43 +1,52 @@
 import { Router } from 'express';
-import { EntityManager } from '@mikro-orm/postgresql';
-import { Tenant } from '../domain/entities/Tenant.js';
-import { User } from '../domain/entities/User.js';
-import { tenantLocalStorage, runInTenantTransaction } from '../db/context.js';
+import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth.js';
 import { UserApplicationService } from '../services/UserApplicationService.js';
 
-export function createAuthRouter(em: EntityManager): Router {
+const signupSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1),
+  tenantName: z.string().min(1),
+  destinationNumber: z.string().min(1),
+});
+
+const loginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1),
+});
+
+const verifyDestinationSchema = z.object({
+  pin: z.string().min(1),
+});
+
+const updateSettingsSchema = z.object({
+  name: z.string().min(1),
+  destinationNumber: z.string().min(1),
+});
+
+export function createAuthRouter(userService: UserApplicationService): Router {
   const router = Router();
-  const userService = new UserApplicationService(em);
 
   /**
    * POST /api/auth/signup
-   * Tenant Onboarding & Registration
+   * Multi-Tenant Onboarding Endpoint
    */
   router.post('/signup', async (req, res) => {
     try {
-      const { email, password, tenantName, destinationNumber } = req.body;
-
-      if (!email || !password || !tenantName || !destinationNumber) {
-        res.status(400).json({ error: 'Missing required onboarding parameters.' });
+      const parseResult = signupSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        res.status(400).json({ error: 'Missing required onboarding parameters: email, password, tenantName, and destinationNumber are required.' });
         return;
       }
 
-      const { token, tenant } = await userService.registerOnboarding(email, password, tenantName, destinationNumber);
-
+      const result = await userService.createUser(parseResult.data);
       res.status(201).json({
         message: 'Onboarding registration completed successfully.',
-        token,
-        tenant: {
-          id: tenant.id,
-          name: tenant.name,
-          destinationNumber: tenant.destinationNumber,
-          destinationVerified: tenant.destinationVerified
-        }
+        ...result
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error during onboarding registration:', error);
-      const status = error.status || 500;
+      const status = error.status || (error.message.includes('exists') ? 400 : 500);
       res.status(status).json({ error: error.message || 'Internal server error occurred during tenant onboarding.' });
     }
   });
@@ -48,28 +57,20 @@ export function createAuthRouter(em: EntityManager): Router {
    */
   router.post('/login', async (req, res) => {
     try {
-      const { email, password } = req.body;
-
-      if (!email || !password) {
+      const parseResult = loginSchema.safeParse(req.body);
+      if (!parseResult.success) {
         res.status(400).json({ error: 'Missing email or password credentials.' });
         return;
       }
 
-      const { token, user } = await userService.authenticateUser(email, password);
-
+      const result = await userService.authenticateUser(parseResult.data);
       res.status(200).json({
         message: 'Authentication successful.',
-        token,
-        tenant: {
-          id: user.tenant.id,
-          name: user.tenant.name,
-          destinationNumber: user.tenant.destinationNumber,
-          destinationVerified: user.tenant.destinationVerified
-        }
+        ...result
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error during login authentication:', error);
-      const status = error.status || 500;
+      const status = error.status || (error.message.includes('Invalid') ? 401 : 500);
       res.status(status).json({ error: error.message || 'Internal server error occurred during login.' });
     }
   });
@@ -80,45 +81,27 @@ export function createAuthRouter(em: EntityManager): Router {
    */
   router.post('/verify-destination', authenticateToken, async (req, res) => {
     try {
-      const { pin } = req.body;
-
-      if (!pin) {
+      const parseResult = verifyDestinationSchema.safeParse(req.body);
+      if (!parseResult.success) {
         res.status(400).json({ error: 'Verification PIN is required.' });
         return;
       }
 
-      // Standard mock validation: pin "1234" is accepted for testing
-      if (pin !== '1234') {
-        res.status(400).json({ error: 'Incorrect verification PIN.' });
+      const tenantId = req.context?.tenantId;
+      if (!tenantId) {
+        res.status(401).json({ error: 'Unauthorized: missing tenant context.' });
         return;
       }
 
-      // Run query inside localized RLS-guarded transaction block
-      const result = await runInTenantTransaction(em, async (txEm) => {
-        const tenantId = req.context?.tenantId;
-        const tenant = await txEm.findOne<Tenant>(Tenant, { id: tenantId } as any);
-        
-        if (!tenant) {
-          throw new Error('Tenant not found.');
-        }
-
-        tenant.updateDestination(tenant.destinationNumber, true);
-        await txEm.flush();
-        return tenant;
-      });
-
+      const result = await userService.verifyDestination(tenantId, parseResult.data.pin);
       res.status(200).json({
         message: 'Forwarding destination phone number verified successfully.',
-        tenant: {
-          id: result.id,
-          name: result.name,
-          destinationNumber: result.destinationNumber,
-          destinationVerified: result.destinationVerified
-        }
+        tenant: result
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error during destination verification:', error);
-      res.status(500).json({ error: error.message || 'Internal server error occurred.' });
+      const status = error.status || (error.message.includes('Incorrect') ? 400 : 500);
+      res.status(status).json({ error: error.message || 'Internal server error occurred.' });
     }
   });
 
@@ -128,30 +111,17 @@ export function createAuthRouter(em: EntityManager): Router {
    */
   router.get('/settings', authenticateToken, async (req, res) => {
     try {
-      const result = await runInTenantTransaction(em, async (txEm) => {
-        const tenantId = req.context?.tenantId;
-        const tenant = await txEm.findOne<Tenant>(Tenant, { id: tenantId } as any);
-        if (!tenant) throw new Error('Tenant not found.');
-        
-        const userId = req.context?.userId;
-        const user = await txEm.findOne<User>(User, { id: userId } as any, { populate: ['role'] as any });
-        return { tenant, user };
-      });
+      const tenantId = req.context?.tenantId;
+      const userId = req.context?.userId;
+      
+      if (!tenantId || !userId) {
+        res.status(401).json({ error: 'Unauthorized: missing context.' });
+        return;
+      }
 
-      res.status(200).json({
-        tenant: {
-          id: result.tenant.id,
-          name: result.tenant.name,
-          destinationNumber: result.tenant.destinationNumber,
-          destinationVerified: result.tenant.destinationVerified
-        },
-        user: result.user ? {
-          id: result.user.id,
-          email: result.user.email,
-          role: result.user.role ? (result.user.role as any).type : null
-        } : null
-      });
-    } catch (error: any) {
+      const result = await userService.getSettings(tenantId, userId);
+      res.status(200).json(result);
+    } catch (error: unknown) {
       console.error('Error fetching tenant settings:', error);
       res.status(500).json({ error: error.message || 'Internal server error occurred.' });
     }
@@ -163,40 +133,24 @@ export function createAuthRouter(em: EntityManager): Router {
    */
   router.put('/settings', authenticateToken, async (req, res) => {
     try {
-      const { name, destinationNumber } = req.body;
-
-      if (!name || !destinationNumber) {
+      const parseResult = updateSettingsSchema.safeParse(req.body);
+      if (!parseResult.success) {
         res.status(400).json({ error: 'Tenant name and destination number are required.' });
         return;
       }
 
-      // Run query inside localized RLS-guarded transaction block
-      const result = await runInTenantTransaction(em, async (txEm) => {
-        const tenantId = req.context?.tenantId;
-        const tenant = await txEm.findOne<Tenant>(Tenant, { id: tenantId } as any);
-        
-        if (!tenant) {
-          throw new Error('Tenant not found.');
-        }
+      const tenantId = req.context?.tenantId;
+      if (!tenantId) {
+        res.status(401).json({ error: 'Unauthorized: missing tenant context.' });
+        return;
+      }
 
-        const numberChanged = tenant.destinationNumber !== destinationNumber.trim();
-        tenant.updateName(name.trim());
-        tenant.updateDestination(destinationNumber.trim(), !numberChanged ? tenant.destinationVerified : false);
-        
-        await txEm.flush();
-        return tenant;
-      });
-
+      const result = await userService.updateSettings(tenantId, parseResult.data);
       res.status(200).json({
         message: 'Tenant settings updated successfully.',
-        tenant: {
-          id: result.id,
-          name: result.name,
-          destinationNumber: result.destinationNumber,
-          destinationVerified: result.destinationVerified
-        }
+        tenant: result
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error updating tenant settings:', error);
       res.status(500).json({ error: error.message || 'Internal server error occurred.' });
     }

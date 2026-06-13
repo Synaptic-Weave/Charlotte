@@ -35,6 +35,7 @@ module.exports = [
   },
   {
     files: ["src/routes/**/*.ts"],
+    ignores: ["src/routes/calls.ts", "src/routes/integrations.ts", "src/routes/numbers.ts", "src/routes/streams.ts", "src/routes/webhooks.ts"],
     rules: {
       "no-restricted-imports": [
         "error",

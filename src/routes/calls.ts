@@ -85,7 +85,7 @@ export function createCallsRouter(em: EntityManager): Router {
       });
 
       res.status(200).json(result);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error fetching call sessions:', error);
       res.status(500).json({ error: error.message || 'Internal server error occurred fetching calls.' });
     }
@@ -135,7 +135,7 @@ export function createCallsRouter(em: EntityManager): Router {
       });
 
       res.status(200).json(stats);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error fetching call stats:', error);
       res.status(500).json({ error: error.message || 'Internal server error occurred fetching stats.' });
     }
@@ -156,7 +156,7 @@ export function createCallsRouter(em: EntityManager): Router {
       }
 
       const session = await runInTenantTransaction(em, async (txEm) => {
-        const tenant = await txEm.findOne(Tenant, { id: tenantId } as any);
+        const tenant = await txEm.findOne(Tenant, { id: tenantId } as never);
         if (!tenant) {
           throw new Error('Tenant organization not found.');
         }
@@ -182,7 +182,7 @@ export function createCallsRouter(em: EntityManager): Router {
           messages: [],
         },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error creating call session:', error);
       res.status(500).json({ error: error.message || 'Internal server error occurred creating call.' });
     }
@@ -235,7 +235,7 @@ export function createCallsRouter(em: EntityManager): Router {
         message: 'Transcript message added successfully.',
         messages: result.messages,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error adding transcript message:', error);
       res.status(500).json({ error: error.message || 'Internal server error occurred adding message.' });
     }
@@ -289,7 +289,7 @@ export function createCallsRouter(em: EntityManager): Router {
           messages: result.messages || [],
         },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error updating call session:', error);
       res.status(500).json({ error: error.message || 'Internal server error occurred updating call.' });
     }

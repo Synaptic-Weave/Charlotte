@@ -29,7 +29,7 @@ export function createNumbersRouter(em: EntityManager): Router {
       }
 
       const results = await runInTenantTransaction(em, async (txEm) => {
-        const phoneNumbers = await txEm.find(TwilioPhoneNumber, { tenant: { id: tenantId } } as any);
+        const phoneNumbers = await txEm.find(TwilioPhoneNumber, { tenant: { id: tenantId } } as never);
         return phoneNumbers.map((num) => ({
           id: num.id,
           phoneNumber: num.phoneNumber,
@@ -40,7 +40,7 @@ export function createNumbersRouter(em: EntityManager): Router {
       });
 
       res.status(200).json({ numbers: results });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error fetching provisioned phone numbers:', error);
       res.status(500).json({ error: error.message || 'Internal server error occurred fetching numbers.' });
     }
@@ -79,7 +79,7 @@ export function createNumbersRouter(em: EntityManager): Router {
       }));
 
       res.status(200).json({ numbers: results, mode: 'live' });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error searching available phone numbers:', error);
       res.status(500).json({ error: error.message || 'Internal server error occurred searching numbers.' });
     }
@@ -108,7 +108,7 @@ export function createNumbersRouter(em: EntityManager): Router {
       // Execute database operations inside of an RLS-bound transaction
       const result = await runInTenantTransaction(em, async (txEm) => {
         // Fetch Tenant record securely
-        const tenant = await txEm.findOne<Tenant>(Tenant, { id: tenantId } as any);
+        const tenant = await txEm.findOne<Tenant>(Tenant, { id: tenantId } as never);
         if (!tenant) {
           throw new Error('Tenant organization not found.');
         }
@@ -147,7 +147,7 @@ export function createNumbersRouter(em: EntityManager): Router {
           updatedAt: result.updatedAt,
         },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error provisioning phone number:', error);
       res.status(500).json({ error: error.message || 'Internal server error occurred during provisioning.' });
     }

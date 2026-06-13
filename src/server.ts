@@ -173,7 +173,7 @@ async function bootstrap() {
   });
 
   // Global Error Handler
-  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  app.use((err: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
     console.error('Unhandled API Error:', err);
     const status = typeof err.status === 'number' ? err.status : 500;
     const message = status < 500 ? err.message : 'Internal server error occurred.';

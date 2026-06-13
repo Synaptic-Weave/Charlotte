@@ -10,7 +10,7 @@ export class CallSession {
   streamSid: string | null;
   status: CallSessionStatus;
   callerNumber: string;
-  messages: any[];
+  messages: unknown[];
   recordingUrl: string | null;
   readonly createdAt: Date;
   updatedAt: Date;
@@ -22,7 +22,7 @@ export class CallSession {
     streamSid: string | null,
     status: CallSessionStatus,
     callerNumber: string,
-    messages: any[],
+    messages: unknown[],
     recordingUrl: string | null,
     createdAt: Date,
     updatedAt: Date

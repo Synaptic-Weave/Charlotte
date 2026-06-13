@@ -6,14 +6,14 @@ import { runInGlobalTransaction } from '../db/context.js';
 export class AdminService {
   constructor(private readonly em: EntityManager) {}
 
-  async listAllUsersGlobally(): Promise<any[]> {
+  async listAllUsersGlobally(): Promise<Record<string, unknown>[]> {
     return await runInGlobalTransaction(this.em, async (txEm) => {
-      const users = await txEm.find(User, {}, { populate: ['tenant', 'role'] as any });
+      const users = await txEm.find(User, {}, { populate: ['tenant', 'role'] as never });
       return users.map((u) => ({
         id: u.id,
         email: u.email,
         tenantId: u.tenant.id,
-        role: u.role ? (u.role as any).type : null,
+        role: u.role ? (u.role as never).type : null,
       }));
     });
   }

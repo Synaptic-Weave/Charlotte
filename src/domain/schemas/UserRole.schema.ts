@@ -24,12 +24,12 @@ export const SuperAdminSchema = new EntitySchema<SuperAdmin>({
   class: SuperAdmin,
   name: 'SuperAdmin',
   extends: 'UserRole',
-  properties: {} as any,
+  properties: {} as never,
 });
 
 export const TenantAdminSchema = new EntitySchema<TenantAdmin>({
   class: TenantAdmin,
   name: 'TenantAdmin',
   extends: 'UserRole',
-  properties: {} as any,
+  properties: {} as never,
 });

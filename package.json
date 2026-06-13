@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "migrate": "mikro-orm migration:up",
+    "lint": "eslint 'src/**/*.{ts,tsx}'",
     "prepare": "husky"
   },
   "keywords": [

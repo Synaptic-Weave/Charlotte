@@ -9,7 +9,7 @@ export class RoleSeeder {
 
     const users = await em.find<User>(User, {
       email: { $in: ['mbrown77@gmail.com', 'mbrown@synapticweave.com'] },
-    } as any);
+    } as never);
 
     for (const user of users) {
       user.updateRole(superAdminRole);

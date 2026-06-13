@@ -1,11 +1,13 @@
 import { Router } from 'express';
-import { EntityManager } from '@mikro-orm/postgresql';
-import { User } from '../../domain/entities/User.js';
-import { SuperAdmin } from '../../domain/entities/SuperAdmin.js';
-import { TenantAdmin } from '../../domain/entities/TenantAdmin.js';
-import { runInTenantTransaction } from '../../db/context.js';
+import { z } from 'zod';
+import { AdminService } from '../../services/AdminService.js';
 
-export function createAdminRolesRouter(em: EntityManager): Router {
+const assignRoleSchema = z.object({
+  email: z.string().email(),
+  roleType: z.enum(['super_admin', 'tenant_admin']),
+});
+
+export function createAdminRolesRouter(adminService: AdminService): Router {
   const router = Router();
 
   /**
@@ -14,40 +16,18 @@ export function createAdminRolesRouter(em: EntityManager): Router {
    */
   router.post('/', async (req, res) => {
     try {
-      const { email, roleType } = req.body;
-
-      if (!email || !roleType) {
-        res.status(400).json({ error: 'Email and roleType are required.' });
+      const parseResult = assignRoleSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        res.status(400).json({ error: 'Valid email and roleType (super_admin or tenant_admin) are required.' });
         return;
       }
 
-      const fork = em.fork();
-      const user = await fork.findOne<User>(User, { email: email.toLowerCase().trim() } as any, { populate: ['role'] as any });
-      
-      if (!user) {
-        res.status(404).json({ error: 'User not found.' });
-        return;
-      }
-
-      await runInTenantTransaction(fork, async (txEm) => {
-        let newRole;
-        if (roleType === 'super_admin') {
-          newRole = new SuperAdmin();
-        } else if (roleType === 'tenant_admin') {
-          newRole = new TenantAdmin();
-        } else {
-          throw Object.assign(new Error('Invalid roleType.'), { status: 400 });
-        }
-        
-        txEm.persist(newRole);
-        user.updateRole(newRole);
-        txEm.persist(user);
-      });
+      await adminService.assignRole(parseResult.data);
 
       res.status(200).json({ message: 'Role assigned successfully.' });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error assigning role:', error);
-      const status = error.status || 500;
+      const status = error.status || (error.message.includes('not found') ? 404 : 500);
       res.status(status).json({ error: error.message || 'Internal server error occurred.' });
     }
   });
@@ -58,18 +38,9 @@ export function createAdminRolesRouter(em: EntityManager): Router {
    */
   router.get('/', async (req, res) => {
     try {
-      const fork = em.fork();
-      const users = await fork.find<User>(User, {}, { populate: ['role', 'tenant'] as any });
-      
-      const userList = users.map(u => ({
-        id: u.id,
-        email: u.email,
-        role: (u.role as any).type || 'tenant_admin',
-        tenantName: u.tenant.name
-      }));
-
-      res.status(200).json({ users: userList });
-    } catch (error: any) {
+      const users = await adminService.listRoles();
+      res.status(200).json({ users });
+    } catch (error: unknown) {
       console.error('Error fetching users:', error);
       res.status(500).json({ error: 'Internal server error occurred.' });
     }
