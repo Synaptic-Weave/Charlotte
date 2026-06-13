@@ -8,7 +8,7 @@ export class Migration20260613041027 extends Migration {
 
     this.addSql(`alter table "users" drop column "role";`);
 
-    this.addSql(`alter table "users" add column "role_id" uuid not null;`);
+    this.addSql(`alter table "users" add column "role_id" uuid null;`);
     this.addSql(`alter table "users" add constraint "users_role_id_foreign" foreign key ("role_id") references "user_roles" ("id") on update cascade;`);
   }
 

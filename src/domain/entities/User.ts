@@ -8,8 +8,8 @@ export class User {
   tenant: Tenant;
   email: string;
   passwordHash: string;
-  @ManyToOne(() => UserRole)
-  role: UserRole;
+  @ManyToOne(() => UserRole, { nullable: true })
+  role?: UserRole | null;
   readonly createdAt: Date;
   updatedAt: Date;
 
@@ -18,7 +18,7 @@ export class User {
     tenant: Tenant,
     email: string,
     passwordHash: string,
-    role: UserRole,
+    role: UserRole | null | undefined,
     createdAt: Date,
     updatedAt: Date
   ) {
@@ -26,12 +26,14 @@ export class User {
     this.tenant = tenant;
     this.email = email;
     this.passwordHash = passwordHash;
-    this.role = role;
+    if (role !== undefined) {
+      this.role = role;
+    }
     this.createdAt = createdAt;
     this.updatedAt = updatedAt;
   }
 
-  static create(tenant: Tenant, email: string, passwordHash: string, role: UserRole): User {
+  static create(tenant: Tenant, email: string, passwordHash: string, role?: UserRole | null): User {
     const now = new Date();
     return new User(
       uuidv4(),
@@ -49,7 +51,7 @@ export class User {
     this.updatedAt = new Date();
   }
 
-  updateRole(role: UserRole): void {
+  updateRole(role: UserRole | null): void {
     this.role = role;
     this.updatedAt = new Date();
   }
