@@ -11,6 +11,7 @@ export const UserSchema = new EntitySchema<User>({
     email: { type: 'string', unique: true },
     passwordHash: { type: 'string' },
     role: { type: 'string' },
+    roles: { kind: 'm:n', entity: () => 'UserRole', pivotTable: 'user_roles_mapping' },
     createdAt: { type: 'Date' },
     updatedAt: { type: 'Date', onUpdate: () => new Date() },
   },
