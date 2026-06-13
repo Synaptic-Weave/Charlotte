@@ -65,6 +65,7 @@ Gemini CLI operates as **Coordinator**: a team coordinator that dispatches work 
 
 ### Methodology
 
+- **NO DIRECT EM ACCESS FROM ROUTES. They should delegate all EM access to application services.**
 - **Vertical user stories** (Scrum): "As a <persona> I want to <action> so that <end result>"
 - **Lean Software Development**: Optimize lead time, minimize WIP, team swarms on stories
 - **GitHub Flow**: Feature branches (`{type}-{story#}-{title}`) via git worktrees -> PR -> main
