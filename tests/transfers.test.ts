@@ -246,14 +246,18 @@ describe('Charlotte Warm Transfer & Call Bridging Integration Tests', () => {
 
       // Programmatically trigger a transfer_call tool execution callback
       await storedCallbacks.onmessage({
-        toolCall: {
-          functionCalls: [
-            {
-              id: 'fn_route_123',
-              name: 'transfer_call',
-              args: { department: 'Support' }
-            }
-          ]
+        serverContent: {
+          modelTurn: {
+            parts: [
+              {
+                functionCall: {
+                  id: 'fn_route_123',
+                  name: 'transfer_call',
+                  args: { department: 'Support' }
+                }
+              }
+            ]
+          }
         }
       });
 
