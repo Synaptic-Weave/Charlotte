@@ -52,5 +52,28 @@ export function createAdminRolesRouter(em: EntityManager): Router {
     }
   });
 
+  /**
+   * GET /api/admin/roles
+   * List users and their roles.
+   */
+  router.get('/', async (req, res) => {
+    try {
+      const fork = em.fork();
+      const users = await fork.find<User>(User, {}, { populate: ['role', 'tenant'] as any });
+      
+      const userList = users.map(u => ({
+        id: u.id,
+        email: u.email,
+        role: (u.role as any).type || 'tenant_admin',
+        tenantName: u.tenant.name
+      }));
+
+      res.status(200).json({ users: userList });
+    } catch (error: any) {
+      console.error('Error fetching users:', error);
+      res.status(500).json({ error: 'Internal server error occurred.' });
+    }
+  });
+
   return router;
 }
