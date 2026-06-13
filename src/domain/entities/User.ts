@@ -1,3 +1,5 @@
+import { ManyToOne } from '@mikro-orm/core';
+import { UserRole } from './UserRole.js';
 import { v4 as uuidv4 } from 'uuid';
 import { Tenant } from './Tenant.js';
 
@@ -6,7 +8,8 @@ export class User {
   tenant: Tenant;
   email: string;
   passwordHash: string;
-  role: string;
+  @ManyToOne(() => UserRole)
+  role: UserRole;
   readonly createdAt: Date;
   updatedAt: Date;
 
@@ -15,7 +18,7 @@ export class User {
     tenant: Tenant,
     email: string,
     passwordHash: string,
-    role: string,
+    role: UserRole,
     createdAt: Date,
     updatedAt: Date
   ) {
@@ -28,7 +31,7 @@ export class User {
     this.updatedAt = updatedAt;
   }
 
-  static create(tenant: Tenant, email: string, passwordHash: string, role: string): User {
+  static create(tenant: Tenant, email: string, passwordHash: string, role: UserRole): User {
     const now = new Date();
     return new User(
       uuidv4(),
@@ -46,7 +49,7 @@ export class User {
     this.updatedAt = new Date();
   }
 
-  updateRole(role: string): void {
+  updateRole(role: UserRole): void {
     this.role = role;
     this.updatedAt = new Date();
   }

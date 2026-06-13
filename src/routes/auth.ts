@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { Tenant } from '../domain/entities/Tenant.js';
 import { User } from '../domain/entities/User.js';
+import { TenantAdmin } from '../domain/entities/TenantAdmin.js';
 import { Organization } from '../domain/entities/Organization.js';
 import { tenantLocalStorage, runInTenantTransaction } from '../db/context.js';
 import { authenticateToken } from '../middleware/auth.js';
@@ -53,7 +54,9 @@ export function createAuthRouter(em: EntityManager): Router {
           txEm.persist(tenant);
 
           // Create and persist the user
-          const user = User.create(tenant, email.toLowerCase().trim(), passwordHash, 'admin');
+          const tenantAdminRole = new TenantAdmin();
+          txEm.persist(tenantAdminRole);
+          const user = User.create(tenant, email.toLowerCase().trim(), passwordHash, tenantAdminRole);
           txEm.persist(user);
           userId = user.id;
 
@@ -68,7 +71,7 @@ export function createAuthRouter(em: EntityManager): Router {
         {
           tenantId: tenant.id,
           userId: userId!,
-          role: 'admin'
+          role: 'tenant_admin'
         },
         JWT_SECRET,
         { expiresIn: '24h' }
@@ -123,7 +126,7 @@ export function createAuthRouter(em: EntityManager): Router {
         {
           tenantId: user.tenant.id,
           userId: user.id,
-          role: user.role
+          role: (user.role as any).type || 'tenant_admin'
         },
         JWT_SECRET,
         { expiresIn: '24h' }

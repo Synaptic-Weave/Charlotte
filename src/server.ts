@@ -12,6 +12,9 @@ import { createWebhooksRouter } from './routes/webhooks.js';
 import { createCallsRouter } from './routes/calls.js';
 import { createIntegrationsRouter } from './routes/integrations.js';
 import { registerStreamHandler } from './routes/streams.js';
+import { createAdminRolesRouter } from './routes/admin/roles.js';
+import { adminAuth } from './middlewares/adminAuth.js';
+
 
 const PORT = Number(process.env.PORT || 8080);
 const app = express();
@@ -50,6 +53,8 @@ async function bootstrap() {
 
   // Register routes
   app.use('/api/auth', createAuthRouter(orm.em));
+  app.use('/api/admin/roles', adminAuth, createAdminRolesRouter(orm.em));
+
   app.use('/api/tenants/numbers', createNumbersRouter(orm.em));
   app.use('/api/webhook', createWebhooksRouter(orm.em));
   app.use('/api/tenants/calls', createCallsRouter(orm.em));
