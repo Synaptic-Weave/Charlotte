@@ -21,15 +21,25 @@ export function createIntegrationsRouter(integrationService: IntegrationService)
     }
   });
 
-  router.post('/google/callback', async (req: Request, res: Response) => {
+  router.post('/google/callback', authenticateToken, async (req: Request, res: Response) => {
     const { code, state } = req.body;
+    const context = req.context;
     if (!code || !state) {
       res.status(400).json({ error: 'Missing code or state' });
       return;
     }
 
     try {
-      await integrationService.exchangeToken(code as string, state as string);
+      if (!context?.tenantId) {
+        res.status(401).json({ error: 'Tenant context is missing.' });
+        return;
+      }
+      const tenantIdFromState = await integrationService.verifyStateToken(state as string);
+      if (tenantIdFromState !== context.tenantId) {
+        res.status(403).json({ error: 'State token does not match authenticated tenant.' });
+        return;
+      }
+      await integrationService.exchangeToken(code as string, tenantIdFromState);
       res.json({ success: true });
     } catch (error: unknown) {
       console.error('Google OAuth callback error', error);

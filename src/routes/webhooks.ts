@@ -10,6 +10,12 @@ const validateTwilio = (req: Request, res: Response, next: NextFunction) => {
   const url = (process.env.CHARLOTTE_API_BASE_URL || `${protocol}://${req.headers.host}`) + req.originalUrl;
   const params = req.body;
 
+  if (!process.env.TWILIO_AUTH_TOKEN) {
+    console.warn('[Webhook] TWILIO_AUTH_TOKEN not set, bypassing validation.');
+    next();
+    return;
+  }
+
   if (!signature) {
     console.error(`[Webhook] Validation failed: Missing X-Twilio-Signature header on URL: ${url}`);
     return res.status(401).send('Missing Twilio Signature.');
@@ -40,10 +46,19 @@ export function createWebhooksRouter(callSessionService: CallSessionService): Ro
       console.log(`[Webhook] Inbound call received. SID: ${callSid}, To: ${dialedNumber}, From: ${callerNumber}`);
 
       // 1. Resolve tenant context from dialed number
-      const tenantId = await callSessionService.findTenantIdByPhoneNumber(dialedNumber);
+      let tenantId = await callSessionService.findTenantIdByPhoneNumber(dialedNumber);
 
       if (!tenantId) {
-        console.warn(`[Webhook] No tenant found for dialed number: ${dialedNumber}. Playing error and hanging up.`);
+        // Fallback for local testing and unconfigured numbers
+        console.warn(`[Webhook] No tenant found for dialed number: ${dialedNumber}. Falling back to first available tenant.`);
+        const firstTenant = await callSessionService.getFirstTenant();
+        if (firstTenant) {
+          tenantId = firstTenant.id;
+        }
+      }
+
+      if (!tenantId) {
+        console.warn(`[Webhook] No tenant found for dialed number: ${dialedNumber} and no fallback available. Playing error and hanging up.`);
         res.type('text/xml');
         res.send(callSessionService.generateErrorTwiML());
         return;
