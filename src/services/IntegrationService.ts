@@ -26,10 +26,12 @@ export class IntegrationService {
     });
   }
 
-  async exchangeToken(code: string, state: string): Promise<void> {
+  async verifyStateToken(state: string): Promise<string> {
     const decoded = jwt.verify(state, JWT_SECRET) as { tenantId: string };
-    const tenantId = decoded.tenantId;
+    return decoded.tenantId;
+  }
 
+  async exchangeToken(code: string, tenantId: string): Promise<void> {
     const oauth2Client = this.getOauth2Client();
     const { tokens } = await oauth2Client.getToken(code);
     

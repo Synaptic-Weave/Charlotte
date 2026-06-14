@@ -67,3 +67,6 @@ You are part of a **Gemini Team**.
 - **Mailbox:** Your tasks and messages are in the file path provided in your initial prompt (`[MAILBOX: ...]`).
 - **Reporting:** Use `report_back.sh` to send findings to the coordinator.
 - **Collaboration:** Use `send_message.sh` to talk to other specialists found in `index.md`.
+
+### Helper Scripts
+If you create any temporary or helper scripts, you MUST put them in the `.scratch` directory so they don't clutter the repo.

@@ -301,7 +301,10 @@ Never tell the caller to call another number or try another way; always use the 
         try {
           let targetNumber = this.activeTenant.destinationNumber;
           try {
-            const routingNumber = await this.voiceToolSvc.lookupDepartmentRoutingNumber(this.tenantId, department);
+            let routingNumber: string | null = null;
+            await tenantLocalStorage.run({ tenantId: this.tenantId }, async () => {
+              routingNumber = await this.voiceToolSvc.lookupDepartmentRoutingNumber(this.tenantId, department);
+            });
             if (routingNumber) {
               targetNumber = routingNumber;
               console.log(`[Routing] Found department specific routing number: ${targetNumber}`);
@@ -390,7 +393,10 @@ Never tell the caller to call another number or try another way; always use the 
       console.log(`[Tool Call] Model triggered list_calendar_events: ${timeMin} to ${timeMax}`);
       let calResponse: string;
       try {
-        const events = await this.voiceToolSvc.listCalendarEvents(this.tenantId, timeMin, timeMax) as Array<{ start?: { dateTime?: string, date?: string }, end?: { dateTime?: string, date?: string } }>;
+        let events: any[] = [];
+        await tenantLocalStorage.run({ tenantId: this.tenantId }, async () => {
+          events = await this.voiceToolSvc.listCalendarEvents(this.tenantId, timeMin, timeMax) as Array<{ start?: { dateTime?: string, date?: string }, end?: { dateTime?: string, date?: string } }>;
+        });
         calResponse = JSON.stringify(events.map(e => ({
           start: e.start?.dateTime || e.start?.date,
           end: e.end?.dateTime || e.end?.date,
