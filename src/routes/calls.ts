@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { CallSessionService } from '../services/CallSessionService.js';
 import { authenticateToken } from '../middleware/auth.js';
-import { broadcastDashboardUpdate } from '../utils/websocketBroadcaster.js';
+import { broadcastDashboardUpdate } from './streams.js';
 
 // Helper to format timestamps gracefully
 function formatTime(date: Date): string {
