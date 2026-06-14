@@ -9,7 +9,9 @@
     "dev": "tsx watch src/server.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "migrate": "mikro-orm migration:up"
+    "migrate": "mikro-orm migration:up",
+    "lint": "eslint src tests",
+    "prepare": "husky"
   },
   "keywords": [
     "google-adk",
@@ -43,6 +45,7 @@
     "ws": "^8.17.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.60.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.17",
@@ -52,9 +55,17 @@
     "@types/uuid": "^9.0.8",
     "@types/ws": "^8.5.10",
     "@vitest/coverage-v8": "^1.6.0",
+    "eslint": "^10.5.0",
+    "globals": "^17.6.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.7",
     "ts-node-dev": "^2.0.0",
     "tsx": "^4.22.4",
     "typescript": "^5.4.5",
+    "typescript-eslint": "^8.61.0",
     "vitest": "^1.6.0"
+  },
+  "lint-staged": {
+    "*.{ts,js,mjs,cjs}": "eslint"
   }
 }
