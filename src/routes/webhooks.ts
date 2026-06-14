@@ -1,35 +1,28 @@
-import { Router } from 'express';
-import { Twilio } from 'twilio';
+import { Router, Request, Response, NextFunction } from 'express';
 import { CallSessionService } from '../services/CallSessionService.js';
+import twilio from 'twilio';
 
-import { Request, Response, NextFunction } from 'express';
+// Setup Twilio webhook validator middleware
+const validateTwilio = (req: Request, res: Response, next: NextFunction) => {
+  const signature = req.headers['x-twilio-signature'] as string;
+  const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
+  const protocol = isSecure ? 'https' : 'http';
+  const url = (process.env.CHARLOTTE_API_BASE_URL || `${protocol}://${req.headers.host}`) + req.originalUrl;
+  const params = req.body;
 
-// Minimal middleware to loosely check if the request looks like it came from Twilio
-// In production, use twilio.webhook() with your auth token.
-function validateTwilio(req: Request, res: Response, next: NextFunction) {
-  // If we wanted strict validation:
-  // twilio.validateRequest(authToken, req.headers['x-twilio-signature'], url, req.body)
+  if (!signature) {
+    console.error(`[Webhook] Validation failed: Missing X-Twilio-Signature header on URL: ${url}`);
+    return res.status(401).send('Missing Twilio Signature.');
+  }
+
+  const isValid = twilio.validateRequest(process.env.TWILIO_AUTH_TOKEN!, signature, url, params);
+  if (!isValid) {
+    console.error(`[Webhook] Signature validation failed. URL: ${url}, Signature: ${signature}, Params:`, params);
+    return res.status(403).send('Webhook validation failed.');
+  }
+
   next();
-}
-
-function escapeXml(unsafe: string): string {
-  return unsafe.replace(/[<>&'"]/g, (c) => {
-    switch (c) {
-      case '<': return '&lt;';
-      case '>': return '&gt;';
-      case '&': return '&amp;';
-      case '\'': return '&apos;';
-      case '"': return '&quot;';
-      default: return c;
-    }
-  });
-}
-
-// Setup Twilio Client with optional credentials check
-const accountSid = process.env.TWILIO_ACCOUNT_SID;
-const authToken = process.env.TWILIO_AUTH_TOKEN;
-const isTwilioConfigured = accountSid && authToken && accountSid.startsWith('AC') && !accountSid.startsWith('ACXX') && !accountSid.startsWith('AC000');
-const twilioClient = isTwilioConfigured ? new Twilio(accountSid, authToken) : null;
+};
 
 export function createWebhooksRouter(callSessionService: CallSessionService): Router {
   const router = Router();
