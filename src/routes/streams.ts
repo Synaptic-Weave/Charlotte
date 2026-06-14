@@ -2,29 +2,20 @@ import { WebSocket, WebSocketServer, RawData } from 'ws';
 import { IncomingMessage } from 'http';
 
 import twilio from 'twilio';
-// Uses the Google GenAI SDK directly for Gemini Live voice streaming.
-// TODO: migrate to @google/adk once ADK supports real-time audio bidirectional streaming.
-import { GoogleGenAI } from '@google/genai';
 import jwt from 'jsonwebtoken';
 import { tenantLocalStorage } from '../db/context.js';
-import { transcodeTwilioToGemini, downsample24kHzTo8kHzWithCarryover, encodeMuLawBuffer } from '../services/transcoder.js';
-import { LiveServerMessage, Type, Session } from '@google/genai';
 import { Tenant } from '../domain/entities/Tenant.js';
 import { CallSessionService } from '../services/CallSessionService.js';
 import { VoiceToolService } from '../services/VoiceToolService.js';
 import { AppointmentService } from '../services/AppointmentService.js';
 import { CustomerService } from '../services/CustomerService.js';
+import { GeminiStreamService } from '../services/GeminiStreamService.js';
 
 // Setup Twilio Client
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
 const isTwilioConfigured = accountSid && authToken && accountSid.startsWith('AC') && !accountSid.startsWith('ACXX') && !accountSid.startsWith('AC000');
-const twilioClient = isTwilioConfigured ? twilio(accountSid as string, authToken as string) : null;
-
-// Setup Google GenAI Client
-const geminiApiKey = process.env.GEMINI_API_KEY;
-const hasGeminiKey = geminiApiKey && !geminiApiKey.startsWith('AIzaSyMock');
-const ai = hasGeminiKey ? new GoogleGenAI({ apiKey: geminiApiKey, httpOptions: { apiVersion: 'v1alpha' } }) : null;
+export const twilioClient = isTwilioConfigured ? twilio(accountSid as string, authToken as string) : null;
 
 const JWT_SECRET = process.env.JWT_SECRET || 'charlotte_super_secret_jwt_sign_key_change_me_in_production';
 
@@ -101,12 +92,9 @@ export function registerStreamHandler(wss: WebSocketServer, callSessionSvc: Call
     let streamSid: string | null = null;
     let callSid: string | null = null;
     let tenantId: string | null = null;
-    let geminiSession: Session | null = null;
     let activeTenant: Tenant | null = null;
     let dialedNumber: string | null = null;
-    let leftoverSamples: Int16Array = new Int16Array(0);
-    let outboundTransferCallSid: string | null = null;
-    let isTransferring = false;
+    let geminiSvc: GeminiStreamService | null = null;
 
     ws.on('message', async (message: RawData) => {
       try {
@@ -152,7 +140,7 @@ export function registerStreamHandler(wss: WebSocketServer, callSessionSvc: Call
                 console.log(`[Twilio Stream] Using dialed phone number from custom parameters: ${dialedNumber}`);
               }
 
-              const greetingText = tenant.agentGreeting || "Hello, how can I help you today?";
+              const greetingText = (tenant as any).agentGreeting || "Hello, how can I help you today?";
               await callSessionSvc.updateCallStatus(callSid!, streamSid!, 'active', greetingText);
               console.log(`[Twilio Stream] Updated CallSession for CallSid ${callSid} state to "active" and appended welcome greeting.`);
               broadcastDashboardUpdate(tenantId!, { event: 'calls_updated' });
@@ -164,437 +152,32 @@ export function registerStreamHandler(wss: WebSocketServer, callSessionSvc: Call
             }
 
             console.log(`[Twilio Stream] Bidirectional audio bridge initiated for Tenant: ${activeTenant.name}`);
+            
+            const isSecure = req.headers['x-forwarded-proto'] === 'https';
+            const protocol = isSecure ? 'https' : 'http';
+            const apiBaseUrl = process.env.CHARLOTTE_API_BASE_URL || `${protocol}://${req.headers.host}`;
 
-            if (ai) {
-              // Connect to Google Gemini Multimodal Live Voice API
-              const model = process.env.GEMINI_MODEL_NAME || 'gemini-2.0-flash';
-              console.log(`[Gemini] Connecting to Gemini Live model: ${model}`);
-
-              try {
-                geminiSession = await ai.live.connect({
-                  model,
-                  config: {
-                    responseModalities: ['AUDIO'],
-                    speechConfig: {
-                      voiceConfig: {
-                        prebuiltVoiceConfig: {
-                          voiceName: 'Aoede', // Puck, Charon, Kore, Fenrir, Aoede
-                        },
-                      },
-                    },
-                    systemInstruction: {
-                      parts: [
-                        {
-                          text: `You are Charlotte, the professional, friendly, and efficient AI-powered virtual receptionist for ${activeTenant.name}.
-When the conversation starts, you MUST pause for 1 second, then answer the phone by saying exactly: 'Hello, thanks for calling ${activeTenant.name}, how can I assist you?'
-Your job is to answer the caller's questions with brief, direct, and conversational responses suitable for a real-time telephone conversation.
-If the caller asks to be connected, transferred, or routed to a specific department (such as Sales, Support, Billing, or a human agent), you MUST immediately call the 'transfer_call' tool with the destination.
-Never tell the caller to call another number or try another way; always use the 'transfer_call' tool when routing is requested.`,
-                        },
-                      ],
-                    },
-                    tools: [
-                      {
-                        functionDeclarations: [
-                          {
-                            name: 'transfer_call',
-                            description: 'Route or transfer the call to a specific department or human agent.',
-                            parameters: {
-                              type: Type.OBJECT,
-                              properties: {
-                                department: {
-                                  type: Type.STRING,
-                                  description: 'The name of the department or human agent to transfer the call to (e.g. Sales, Support, Billing, Front Desk, or a specific employee name).',
-                                },
-                              },
-                              required: ['department'],
-                            },
-                          },
-                          {
-                            name: 'query_crm',
-                            description: 'Query the CRM for customer context using their phone number.',
-                            parameters: {
-                              type: Type.OBJECT,
-                              properties: {
-                                phoneNumber: {
-                                  type: Type.STRING,
-                                  description: 'The phone number of the customer to look up. It should include the country code (e.g. +1).',
-                                },
-                              },
-                              required: ['phoneNumber'],
-                            },
-                          },
-                          {
-                            name: 'book_appointment',
-                            description: 'Book an appointment for a caller.',
-                            parameters: {
-                              type: Type.OBJECT,
-                              properties: {
-                                customerId: {
-                                  type: Type.STRING,
-                                  description: 'The UUID of the customer. You must query_crm first to get this.',
-                                },
-                                departmentName: {
-                                  type: Type.STRING,
-                                  description: 'The name of the department.',
-                                },
-                                dateString: {
-                                  type: Type.STRING,
-                                  description: 'The appointment date and time in ISO 8601 format.',
-                                },
-                              },
-                              required: ['customerId', 'departmentName', 'dateString'],
-                        },
-                      },
-                      {
-                        name: 'list_calendar_events',
-                        description: 'List upcoming events from the Google Calendar to find free timeslots. Appointments are 60 minutes long, with a 15 minute buffer.',
-                        parameters: {
-                          type: Type.OBJECT,
-                          properties: {
-                            timeMin: {
-                              type: Type.STRING,
-                              description: 'The start date and time in ISO 8601 format.',
-                            },
-                            timeMax: {
-                              type: Type.STRING,
-                              description: 'The end date and time in ISO 8601 format.',
-                            },
-                          },
-                          required: ['timeMin', 'timeMax'],
-                        },
-                      },
-                        ],
-                      },
-                    ],
-                  },
-                  callbacks: {
-                    onmessage: async (serverMsg: LiveServerMessage) => {
-                      try {
-                        // Handle real-time audio transcriptions
-                        const inputTx = serverMsg.serverContent?.inputTranscription;
-                        if (inputTx && inputTx.text && tenantId && callSid) {
-                          const userText = inputTx.text.trim();
-                          if (userText) {
-                            console.log(`[Twilio Stream] User Transcription: ${userText}`);
-                            await callSessionSvc.addMessageToSession(callSid, 'caller', userText);
-                            console.log(`[Twilio Stream] User transcript appended/merged to CallSession ${callSid}`);
-                            broadcastDashboardUpdate(tenantId!, { event: 'calls_updated' });
-                          }
-                        }
-
-                        const outputTx = serverMsg.serverContent?.outputTranscription;
-                        if (outputTx && outputTx.text && tenantId && callSid) {
-                          const agentText = outputTx.text.trim();
-                          if (agentText) {
-                            // Check for welcome greeting to deduplicate
-                            const isGreeting = agentText.toLowerCase().includes('thanks for calling') &&
-                                               agentText.toLowerCase().includes('how can i assist');
-                            if (isGreeting) {
-                              console.log(`[Twilio Stream] Ignoring streaming agent greeting to avoid duplication: "${agentText}"`);
-                            } else {
-                              console.log(`[Twilio Stream] Agent Transcription: ${agentText}`);
-                              await callSessionSvc.addMessageToSession(callSid, 'charlotte', agentText);
-                              console.log(`[Twilio Stream] Agent transcript appended/merged to CallSession ${callSid}`);
-                              broadcastDashboardUpdate(tenantId!, { event: 'calls_updated' });
-                            }
-                          }
-                        }
-
-                        // 1. Handle incoming model audio stream response
-                        const parts = serverMsg.serverContent?.modelTurn?.parts;
-                        if (parts) {
-                          for (const part of parts) {
-                            if (part.inlineData && part.inlineData.data) {
-                              const pcm24kHzBase64 = part.inlineData.data;
-                              const pcmBuffer = Buffer.from(pcm24kHzBase64, 'base64');
-                              const sampleCount = Math.floor(pcmBuffer.length / 2);
-                              const pcm24kHz = new Int16Array(sampleCount);
-
-                              for (let i = 0; i < sampleCount; i++) {
-                                pcm24kHz[i] = pcmBuffer.readInt16LE(i * 2);
-                              }
-
-                              const { downsampled, carryover } = downsample24kHzTo8kHzWithCarryover(
-                                pcm24kHz,
-                                leftoverSamples
-                              );
-                              leftoverSamples = carryover;
-
-                              const muLawBuffer = encodeMuLawBuffer(downsampled);
-                              const twilioPayload = muLawBuffer.toString('base64');
-
-                              // Send media packet back to Twilio
-                              ws.send(
-                                JSON.stringify({
-                                  event: 'media',
-                                  streamSid,
-                                  media: {
-                                    payload: twilioPayload,
-                                  },
-                                })
-                              );
-                            }
-                          }
-                        }
-
-                        // 2. Handle barge-in/interruption (VAD)
-                        if (serverMsg.serverContent?.interrupted) {
-                          console.log('[Gemini] User interrupted receptionist. Purging Twilio queue.');
-                          // Send "clear" event to Twilio to purge its current output audio buffer
-                          ws.send(
-                            JSON.stringify({
-                              event: 'clear',
-                              streamSid,
-                            })
-                          );
-                        }
-
-                        // 3. Handle tool/function calls from the model
-                        const toolParts = serverMsg.serverContent?.modelTurn?.parts || [];
-                        const functionCalls = toolParts.map((p: { functionCall?: unknown }) => p.functionCall).filter(Boolean) as Array<{ name: string; args: Record<string, unknown>; id: string }>;
-                        if (functionCalls.length > 0) {
-                          for (const fn of functionCalls) {
-                            if (fn.name === 'transfer_call') {
-                              const { department } = fn.args as { department: string };
-                              console.log(`[Tool Call] Model triggered transfer_call to: ${department}`);
-                              isTransferring = true;
-
-                              // Acknowledge tool execution back to Gemini
-                              if (geminiSession) {
-                                await geminiSession.sendToolResponse({
-                                  functionResponses: [
-                                    {
-                                      name: 'transfer_call',
-                                      id: fn.id,
-                                      response: {
-                                        status: 'success',
-                                        message: `Successfully transferring call to ${department}.`,
-                                      },
-                                    },
-                                  ],
-                                });
-                              }
-
-                              // Execute the warm transfer via Twilio REST API
-                              if (twilioClient && callSid && activeTenant) {
-                                try {
-                                  // Look up department routing number
-                                  let targetNumber = activeTenant.destinationNumber;
-                                  try {
-                                    const routingNumber = await voiceToolSvc.lookupDepartmentRoutingNumber(tenantId!, department);
-                                    if (routingNumber) {
-                                      targetNumber = routingNumber;
-                                      console.log(`[Routing] Found department specific routing number: ${targetNumber}`);
-                                    }
-                                  } catch (err) {
-                                    console.error('[Routing] Error looking up department routing number:', err);
-                                  }
-
-                                  console.log(`[Twilio REST] Putting inbound caller ${callSid} into conference Conf_${callSid}...`);
-                                  const holdMusicUrl = process.env.HOLD_MUSIC_URL || 'http://com.twilio.music.classical.s3.amazonaws.com/BusyStrings.mp3';
-                                  await twilioClient.calls(callSid).update({
-                                    twiml: `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say voice="Polly.Joanna-Neural">One moment while I connect you to ${department}.</Say>
-  <Dial>
-    <Conference waitUrl="${holdMusicUrl}" startConferenceOnEnter="false" endConferenceOnExit="true">Conf_${callSid}</Conference>
-  </Dial>
-</Response>`
-                                  });
-
-                                  console.log(`[Twilio REST] Initiating outbound transfer call to ${targetNumber}...`);
-                                  const isSecure = req.headers['x-forwarded-proto'] === 'https';
-                                  const protocol = isSecure ? 'https' : 'http';
-                                  const apiBaseUrl = process.env.CHARLOTTE_API_BASE_URL || `${protocol}://${req.headers.host}`;
-                                  const fromNumber = dialedNumber || process.env.TWILIO_FROM_NUMBER || '';
-
-                                  // Support SIP URI routing if targetNumber starts with sip:
-                                  let outboundTwiml = '';
-                                  if (targetNumber.startsWith('sip:')) {
-                                    outboundTwiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Dial>
-    <Sip>${targetNumber}</Sip>
-  </Dial>
-</Response>`;
-                                    const outboundCall = await twilioClient.calls.create({
-                                      twiml: outboundTwiml,
-                                      to: targetNumber,
-                                      from: fromNumber
-                                    });
-                                    outboundTransferCallSid = outboundCall.sid;
-                                    console.log(`[Twilio REST] Outbound SIP transfer call initiated successfully.`);
-                                  } else {
-                                    const outboundCall = await twilioClient.calls.create({
-                                      to: targetNumber,
-                                      from: fromNumber,
-                                      url: `${apiBaseUrl}/api/webhook/twilio/transfer-whisper?inboundCallSid=${callSid}&department=${encodeURIComponent(department)}&tenantId=${tenantId}`
-                                    });
-                                    outboundTransferCallSid = outboundCall.sid;
-                                    console.log(`[Twilio REST] Outbound transfer call initiated successfully.`);
-                                  }
-
-                                } catch (err) {
-                                  console.error('[Twilio REST] Failed to perform warm transfer:', err);
-                                }
-                              } else {
-                                console.log(`[Twilio Mock] Warm transfer for Call ${callSid} to ${activeTenant?.destinationNumber || 'destination'} requested (mock mode).`);
-                              }
-                            } else if (fn.name === 'query_crm') {
-                              const { phoneNumber } = fn.args;
-                              console.log(`[Tool Call] Model triggered query_crm for: ${phoneNumber}`);
-                              
-                              let crmResponse = 'No customer found with that phone number.';
-                              try {
-                                await tenantLocalStorage.run({ tenantId: tenantId! }, async () => {
-                                  const customer = await customerSvc.findByPhoneNumber(phoneNumber);
-                                  if (customer) {
-                                    crmResponse = `Customer found: ID: ${customer.id}, Name: ${customer.name}. Context: ${customer.context || 'None'}`;
-                                  }
-                                });
-                              } catch (err) {
-                                console.error('[Tool Call] Error executing query_crm:', err);
-                                crmResponse = 'Error occurred while querying the CRM.';
-                              }
-
-                              if (geminiSession) {
-                                await geminiSession.sendToolResponse({
-                                  functionResponses: [
-                                    {
-                                      name: 'query_crm',
-                                      id: fn.id,
-                                      response: {
-                                        status: 'success',
-                                        message: crmResponse,
-                                      },
-                                    },
-                                  ],
-                                });
-                              }
-                            } else if (fn.name === 'list_calendar_events') {
-                              const { timeMin, timeMax } = fn.args;
-                              console.log(`[Tool Call] Model triggered list_calendar_events: ${timeMin} to ${timeMax}`);
-                              let calResponse = '';
-                              try {
-                                const events = await voiceToolSvc.listCalendarEvents(tenantId!, timeMin, timeMax) as Array<{ start?: { dateTime?: string, date?: string }, end?: { dateTime?: string, date?: string } }>;
-                                calResponse = JSON.stringify(events.map(e => ({
-                                  start: e.start?.dateTime || e.start?.date,
-                                  end: e.end?.dateTime || e.end?.date,
-                                  summary: 'Busy'
-                                })));
-                              } catch (err: unknown) {
-                                console.error('[Tool Call] Error executing list_calendar_events:', err);
-                                calResponse = 'Failed to fetch calendar events.';
-                              }
-
-                              if (geminiSession) {
-                                await geminiSession.sendToolResponse({
-                                  functionResponses: [
-                                    {
-                                      name: 'list_calendar_events',
-                                      id: fn.id,
-                                      response: { status: 'success', events: calResponse },
-                                    },
-                                  ],
-                                });
-                              }
-                            } else if (fn.name === 'book_appointment') {
-                              const { customerId, departmentName, dateString } = fn.args;
-                              console.log(`[Tool Call] Model triggered book_appointment for: ${customerId}, ${departmentName}, ${dateString}`);
-                              
-                              let bookResponse = '';
-                              try {
-                                await tenantLocalStorage.run({ tenantId: tenantId! }, async () => {
-                                  const appointment = await appointmentSvc.bookAppointment(customerId, departmentName, dateString);
-                                  bookResponse = `Appointment successfully booked for ${appointment.date} with ${departmentName}.`;
-                                });
-                              } catch (err: unknown) {
-                                console.error('[Tool Call] Error executing book_appointment:', err);
-                                bookResponse = `Failed to book appointment: ${err instanceof Error ? err.message : String(err)}. Please ask for a new time.`;
-                              }
-
-                              if (geminiSession) {
-                                await geminiSession.sendToolResponse({
-                                  functionResponses: [
-                                    {
-                                      name: 'book_appointment',
-                                      id: fn.id,
-                                      response: {
-                                        status: 'success',
-                                        message: bookResponse,
-                                      },
-                                    },
-                                  ],
-                                });
-                              }
-                            }
-                          }
-                        }
-                      } catch (err) {
-                        console.error('[Gemini] Error handling message:', err);
-                      }
-                    },
-                    onerror: (err: unknown) => {
-                      console.error('[Gemini] WebSocket error:', err);
-                    },
-                    onclose: (e: unknown) => {
-                      console.log('[Gemini] Connection closed:', e);
-                    },
-                  },
-                });
-
-                console.log('[Gemini] Connected to Live Voice API. Triggering initial greeting.');
-                try {
-                  if (geminiSession) {
-                    await geminiSession.sendClientContent({
-                      turns: [{ role: 'user', parts: [{ text: "Start the conversation with your greeting." }] }],
-                      turnComplete: true
-                    });
-                  }
-                } catch (err) {
-                  console.error('[Gemini] Failed to send initial greeting trigger:', err);
-                }
-              } catch (err) {
-                console.error('[Gemini] Failed to open live connection:', err);
-              }
-            } else {
-              console.log('[Gemini Mock] Running in voice receptionist sandbox mode (No Gemini API Key set).');
-              // Setup a simple sandbox voice greet interval for testing
-              setTimeout(() => {
-                if (ws.readyState === WebSocket.OPEN) {
-                  console.log('[Gemini Mock] Sending sandbox greeting audio...');
-                  // We send a tiny silent or mock audio packet to confirm websocket stream communication is working
-                  const mockData = Buffer.alloc(160, 0x7F).toString('base64');
-                  ws.send(
-                    JSON.stringify({
-                      event: 'media',
-                      streamSid,
-                      media: {
-                        payload: mockData,
-                      },
-                    })
-                  );
-                }
-              }, 1000);
-            }
+            geminiSvc = new GeminiStreamService(
+              ws,
+              streamSid!,
+              callSid!,
+              tenantId!,
+              activeTenant,
+              dialedNumber,
+              twilioClient,
+              callSessionSvc,
+              voiceToolSvc,
+              appointmentSvc,
+              customerSvc,
+              apiBaseUrl
+            );
+            await geminiSvc.start();
             break;
           }
 
           case 'media': {
-            // Forward voice stream packets to Google Gemini Live Voice API
-            if (geminiSession) {
-              const base64MuLaw = msg.media.payload;
-              const geminiPayload = transcodeTwilioToGemini(base64MuLaw);
-
-              if (geminiSession) {
-                await geminiSession.sendRealtimeInput([{
-                  audio: {
-                    data: geminiPayload,
-                    mimeType: 'audio/pcm;rate=16000',
-                  },
-                }]);
-              }
+            if (geminiSvc) {
+              await geminiSvc.processMedia(msg.media.payload);
             }
             break;
           }
@@ -612,31 +195,23 @@ Never tell the caller to call another number or try another way; always use the 
     ws.on('close', async (code: number, reason: string) => {
       console.log(`[WebSocket] Twilio Stream closed. Code: ${code}, Reason: ${reason}`);
 
-      // Terminate outbound transfer call if it exists and we are not transferring
-      if (outboundTransferCallSid && twilioClient && !isTransferring) {
-        try {
-          console.log(`[Twilio REST] Inbound dropped, terminating active outbound transfer call ${outboundTransferCallSid}...`);
-          await twilioClient.calls(outboundTransferCallSid).update({ status: 'completed' });
-        } catch (err) {
-          console.error(`[Twilio REST] Failed to terminate outbound call:`, err);
+      if (geminiSvc) {
+        if (geminiSvc.outboundTransferCallSid && twilioClient && !geminiSvc.isTransferring) {
+          try {
+            console.log(`[Twilio REST] Inbound dropped, terminating active outbound transfer call ${geminiSvc.outboundTransferCallSid}...`);
+            await twilioClient.calls(geminiSvc.outboundTransferCallSid).update({ status: 'completed' });
+          } catch (err) {
+            console.error(`[Twilio REST] Failed to terminate outbound call:`, err);
+          }
         }
-      }
-
-      // Clean up Gemini Live connection
-      if (geminiSession) {
-        try {
-          console.log('[Gemini] Closing Live API session.');
-          geminiSession.close();
-        } catch (err) {
-          console.error('[Gemini] Error closing session:', err);
-        }
+        geminiSvc.close();
       }
 
       // Update CallSession to completed/failed state
       if (callSid && tenantId) {
         try {
           await tenantLocalStorage.run({ tenantId }, async () => {
-            await callSessionSvc.updateCallStatus(callSid, '', 'completed');
+            await callSessionSvc.updateCallStatus(callSid!, '', 'completed');
             console.log(`[Twilio Stream] Updated CallSession ${callSid} state to "completed".`);
             broadcastDashboardUpdate(tenantId!, { event: 'calls_updated' });
           });
