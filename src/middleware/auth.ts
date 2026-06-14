@@ -4,6 +4,7 @@ import { tenantLocalStorage, TenantContext } from '../db/context.js';
 
 // Extend Express Request interface to include context
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
       context?: TenantContext;

@@ -1,3 +1,4 @@
+ 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import express from 'express';
 import http from 'http';
@@ -24,8 +25,8 @@ import {
   transcodeGeminiToTwilio
 } from '../src/services/transcoder.js';
 
-let createWebhooksRouter: any;
-let registerStreamHandler: any;
+let createWebhooksRouter: unknown;
+let registerStreamHandler: unknown;
 
 // Helper for waiting in async operations
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -46,7 +47,7 @@ async function setupTestDatabase(): Promise<string> {
       await client.connect();
       await client.end();
       return url;
-    } catch (e) {
+    } catch {
       // Ignore and try next
     }
   }
@@ -60,7 +61,7 @@ async function setupTestDatabase(): Promise<string> {
     if (res.rowCount === 0) {
       await client.query("CREATE DATABASE charlotte_db");
     }
-  } catch (e) {
+  } catch {
     throw new Error('Could not resolve postgres connection or create charlotte_db.');
   } finally {
     await client.end();
@@ -139,7 +140,7 @@ describe('Charlotte Telephony Inbound Call Webhook & WebSocket Media Stream Brid
 
     // Bind HTTP server to dynamic free port assigned by the OS
     await new Promise<void>((resolve) => server.listen(0, () => resolve()));
-    port = (server.address() as any).port;
+    port = (server.address() as unknown).port;
     baseUrl = `http://localhost:${port}`;
     wsUrl = `ws://localhost:${port}/api/streams`;
     console.log(`[Test Server] Live on ${baseUrl} & WebSocket on ${wsUrl}`);
@@ -313,7 +314,7 @@ describe('Charlotte Telephony Inbound Call Webhook & WebSocket Media Stream Brid
       });
 
       // Set up listeners to capture incoming server messages
-      const receivedMessages: any[] = [];
+      const receivedMessages: unknown[] = [];
       client.on('message', (data: string) => {
         receivedMessages.push(JSON.parse(data));
       });

@@ -8,7 +8,7 @@
  */
 
 const BIAS = 0x84;
-const MAX_PCM = 32767;
+
 
 // Precomputed lookup tables
 const MU_LAW_TO_PCM_TABLE = new Int16Array(256);
@@ -193,7 +193,7 @@ export function downsample24kHzTo8kHzWithCarryover(
   }
 
   const leftoverCount = totalLen % 3;
-  let nextCarryover = new Int16Array(leftoverCount);
+  const nextCarryover = new Int16Array(leftoverCount);
   for (let i = 0; i < leftoverCount; i++) {
     nextCarryover[i] = combined[totalLen - leftoverCount + i];
   }

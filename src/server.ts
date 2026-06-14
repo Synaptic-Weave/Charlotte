@@ -11,6 +11,9 @@ import { createNumbersRouter } from './routes/numbers.js';
 import { createWebhooksRouter } from './routes/webhooks.js';
 import { createCallsRouter } from './routes/calls.js';
 import { createIntegrationsRouter } from './routes/integrations.js';
+import { AuthService } from './services/AuthService.js';
+import { NumberService } from './services/NumberService.js';
+import { IntegrationService } from './services/IntegrationService.js';
 import { registerStreamHandler } from './routes/streams.js';
 import { CallSessionService } from './services/CallSessionService.js';
 import { VoiceToolService } from './services/VoiceToolService.js';
@@ -57,11 +60,15 @@ async function bootstrap() {
   });
 
   // Register routes
-  app.use('/api/auth', createAuthRouter(orm.em));
-  app.use('/api/tenants/numbers', createNumbersRouter(orm.em));
-  app.use('/api/webhook', createWebhooksRouter(orm.em));
-  app.use('/api/tenants/calls', createCallsRouter(orm.em));
-  app.use('/api/integrations', createIntegrationsRouter(orm.em));
+  const authSvc = new AuthService(orm.em);
+  const numberSvc = new NumberService(orm.em);
+  const integrationSvc = new IntegrationService(orm.em);
+
+  app.use('/api/auth', createAuthRouter(authSvc));
+  app.use('/api/tenants/numbers', createNumbersRouter(numberSvc));
+  app.use('/api/webhook', createWebhooksRouter(callSessionSvc));
+  app.use('/api/tenants/calls', createCallsRouter(callSessionSvc));
+  app.use('/api/integrations', createIntegrationsRouter(integrationSvc));
 
   // Serve static files from the React frontend build folder if it exists
   const frontendDistPath = path.resolve(__dirname, '../frontend/dist');
@@ -176,7 +183,9 @@ async function bootstrap() {
   });
 
   // Global Error Handler
-  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  app.use((err: Error & { status?: number }, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    // _next is deliberately unused but required by Express to recognize this as an error handler
     console.error('Unhandled API Error:', err);
     const status = typeof err.status === 'number' ? err.status : 500;
     const message = status < 500 ? err.message : 'Internal server error occurred.';

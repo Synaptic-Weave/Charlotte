@@ -7,7 +7,7 @@ import twilio from 'twilio';
 import { GoogleGenAI } from '@google/genai';
 import jwt from 'jsonwebtoken';
 import { tenantLocalStorage } from '../db/context.js';
-import { transcodeTwilioToGemini, transcodeGeminiToTwilio, downsample24kHzTo8kHzWithCarryover, encodeMuLawBuffer } from '../services/transcoder.js';
+import { transcodeTwilioToGemini, downsample24kHzTo8kHzWithCarryover, encodeMuLawBuffer } from '../services/transcoder.js';
 import { LiveServerMessage, Type, Session } from '@google/genai';
 import { Tenant } from '../domain/entities/Tenant.js';
 import { CallSessionService } from '../services/CallSessionService.js';

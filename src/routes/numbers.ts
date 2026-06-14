@@ -1,18 +1,15 @@
 import { Router } from 'express';
-import { EntityManager } from '@mikro-orm/postgresql';
 import twilio from 'twilio';
-import { Tenant } from '../domain/entities/Tenant.js';
-import { TwilioPhoneNumber } from '../domain/entities/TwilioPhoneNumber.js';
-import { runInTenantTransaction } from '../db/context.js';
+import { NumberService } from '../services/NumberService.js';
 import { authenticateToken } from '../middleware/auth.js';
 
 // Setup Twilio Client with optional credentials check
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
 const isTwilioConfigured = accountSid && authToken && accountSid.startsWith('AC') && !accountSid.startsWith('ACXX') && !accountSid.startsWith('AC000');
-const twilioClient = isTwilioConfigured ? twilio(accountSid as string, authToken as string) : null;
+const twilioClient = isTwilioConfigured ? twilio(accountSid, authToken) : null;
 
-export function createNumbersRouter(em: EntityManager): Router {
+export function createNumbersRouter(numberService: NumberService): Router {
   const router = Router();
 
   /**
@@ -28,21 +25,20 @@ export function createNumbersRouter(em: EntityManager): Router {
         return;
       }
 
-      const results = await runInTenantTransaction(em, async (txEm) => {
-        const phoneNumbers = await txEm.find(TwilioPhoneNumber, { tenant: { id: tenantId } } as any);
-        return phoneNumbers.map((num) => ({
-          id: num.id,
-          phoneNumber: num.phoneNumber,
-          friendlyName: num.friendlyName,
-          createdAt: num.createdAt,
-          updatedAt: num.updatedAt,
-        }));
-      });
+      const results = await numberService.getProvisionedNumbers(tenantId);
 
-      res.status(200).json({ numbers: results });
-    } catch (error: any) {
+      const mapped = results.map((num) => ({
+        id: num.id,
+        phoneNumber: num.phoneNumber,
+        friendlyName: num.friendlyName,
+        createdAt: num.createdAt,
+        updatedAt: num.updatedAt,
+      }));
+
+      res.status(200).json({ numbers: mapped });
+    } catch (error: unknown) {
       console.error('Error fetching provisioned phone numbers:', error);
-      res.status(500).json({ error: error.message || 'Internal server error occurred fetching numbers.' });
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error occurred fetching numbers.' });
     }
   });
 
@@ -79,9 +75,9 @@ export function createNumbersRouter(em: EntityManager): Router {
       }));
 
       res.status(200).json({ numbers: results, mode: 'live' });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error searching available phone numbers:', error);
-      res.status(500).json({ error: error.message || 'Internal server error occurred searching numbers.' });
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error occurred searching numbers.' });
     }
   });
 
@@ -105,37 +101,25 @@ export function createNumbersRouter(em: EntityManager): Router {
         return;
       }
 
-      // Execute database operations inside of an RLS-bound transaction
-      const result = await runInTenantTransaction(em, async (txEm) => {
-        // Fetch Tenant record securely
-        const tenant = await txEm.findOne<Tenant>(Tenant, { id: tenantId } as any);
-        if (!tenant) {
-          throw new Error('Tenant organization not found.');
-        }
+      if (!twilioClient) {
+        res.status(503).json({ error: 'Real Twilio credentials (TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN) are missing. Cannot assign a real number. Please update your environment variables.' });
+        return;
+      }
 
-        let actualFriendlyName = friendlyName || `Charlotte Virtual Line - ${phoneNumber}`;
+      const actualFriendlyName = friendlyName || `Charlotte Virtual Line - ${phoneNumber}`;
 
-        if (!twilioClient) {
-          throw new Error('Real Twilio credentials (TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN) are missing. Cannot assign a real number. Please update your environment variables.');
-        }
-
-        // Programmatically buy the number on Twilio
-        const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
-        const protocol = isSecure ? 'https' : 'http';
-        const baseUrl = process.env.CHARLOTTE_API_BASE_URL || `${protocol}://${req.headers.host}`;
-        await twilioClient.incomingPhoneNumbers.create({
-          phoneNumber,
-          friendlyName: actualFriendlyName,
-          voiceUrl: `${baseUrl}/api/webhook/twilio/inbound-call`,
-        });
-
-        // Instantiate and persist the TwilioPhoneNumber entity
-        const twilioPhone = TwilioPhoneNumber.create(tenant, phoneNumber, actualFriendlyName);
-        txEm.persist(twilioPhone);
-        await txEm.flush();
-
-        return twilioPhone;
+      // Programmatically buy the number on Twilio
+      const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
+      const protocol = isSecure ? 'https' : 'http';
+      const baseUrl = process.env.CHARLOTTE_API_BASE_URL || `${protocol}://${req.headers.host}`;
+      
+      await twilioClient.incomingPhoneNumbers.create({
+        phoneNumber,
+        friendlyName: actualFriendlyName,
+        voiceUrl: `${baseUrl}/api/webhook/twilio/inbound-call`,
       });
+
+      const result = await numberService.provisionNumber(tenantId, phoneNumber, actualFriendlyName);
 
       res.status(201).json({
         message: 'Phone number provisioned and registered successfully.',
@@ -147,9 +131,9 @@ export function createNumbersRouter(em: EntityManager): Router {
           updatedAt: result.updatedAt,
         },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error provisioning phone number:', error);
-      res.status(500).json({ error: error.message || 'Internal server error occurred during provisioning.' });
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error occurred during provisioning.' });
     }
   });
 
