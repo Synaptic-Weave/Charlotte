@@ -44,13 +44,8 @@ export function createWebhooksRouter(callSessionService: CallSessionService): Ro
 
       if (!tenantId) {
         console.warn(`[Webhook] No tenant found for dialed number: ${dialedNumber}. Playing error and hanging up.`);
-        const twiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say voice="Polly.Joanna-Neural">We're sorry, but the application could not find a subscriber for this number. Goodbye.</Say>
-  <Hangup />
-</Response>`;
         res.type('text/xml');
-        res.send(twiml);
+        res.send(callSessionService.generateErrorTwiML());
         return;
       }
 
@@ -64,18 +59,7 @@ export function createWebhooksRouter(callSessionService: CallSessionService): Ro
 
       const streamUrl = `${wsProtocol}://${host}/api/streams`;
 
-      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Connect>
-    <Stream url="${streamUrl}">
-      <Parameter name="tenantId" value="${tenantId}" />
-      <Parameter name="callSid" value="${callSid}" />
-      <Parameter name="dialedNumber" value="${dialedNumber}" />
-      <Parameter name="callerNumber" value="${callerNumber}" />
-    </Stream>
-  </Connect>
-</Response>`;
-
+      const twiml = callSessionService.generateStreamTwiML(streamUrl, tenantId, callSid, dialedNumber, callerNumber);
       res.type('text/xml');
       res.send(twiml);
     } catch (error: unknown) {
@@ -101,14 +85,7 @@ export function createWebhooksRouter(callSessionService: CallSessionService): Ro
 
       console.log(`[Webhook] Transfer whisper prompt. InboundCallSid: ${inboundCallSid}, Department: ${department}, TenantId: ${tenantId}`);
 
-      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Gather action="/api/webhook/twilio/transfer-decision?inboundCallSid=${inboundCallSid}&amp;department=${encodeURIComponent(department)}" numDigits="1" timeout="10">
-    <Say voice="Polly.Joanna-Neural">You have an incoming call from Charlotte for the ${escapeXml(department)} department. Press 1 to accept this call, or press 2 to send it to voicemail.</Say>
-  </Gather>
-  <Redirect>/api/webhook/twilio/transfer-decision?inboundCallSid=${inboundCallSid}&amp;department=${encodeURIComponent(department)}&amp;timeout=true</Redirect>
-</Response>`;
-
+      const twiml = callSessionService.generateTransferWhisperTwiML(inboundCallSid, department);
       res.type('text/xml');
       res.send(twiml);
     } catch (error: unknown) {
@@ -137,44 +114,14 @@ export function createWebhooksRouter(callSessionService: CallSessionService): Ro
 
       if (digits === '1' && timeout !== 'true') {
         // Accept: join owner to the conference room
-        const twiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say voice="Polly.Joanna-Neural">Connecting you now.</Say>
-  <Dial>
-    <Conference startConferenceOnEnter="true" endConferenceOnExit="true">Conf_${inboundCallSid}</Conference>
-  </Dial>
-</Response>`;
-
+        const twiml = callSessionService.generateAcceptTransferTwiML(inboundCallSid);
         res.type('text/xml');
         res.send(twiml);
         return;
       }
 
       // Decline/timeout/any other key: send caller to voicemail, say goodbye to owner
-      const ownerTwiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say voice="Polly.Joanna-Neural">Thank you. The caller will be sent to voicemail. Goodbye.</Say>
-  <Hangup />
-</Response>`;
-
-      if (twilioClient) {
-        try {
-          console.log(`[Twilio REST] Redirecting inbound caller ${inboundCallSid} to voicemail prompt...`);
-          await twilioClient.calls(inboundCallSid).update({
-            twiml: `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say voice="Polly.Joanna-Neural">I'm sorry, but no one is available in the ${escapeXml(department)} department right now. Please leave a message after the tone.</Say>
-  <Record action="/api/webhook/twilio/voicemail-callback?inboundCallSid=${inboundCallSid}" maxLength="60" playBeep="true" />
-</Response>`
-          });
-          console.log(`[Twilio REST] Inbound call ${inboundCallSid} successfully redirected to voicemail.`);
-        } catch (err: unknown) {
-          console.error(`[Twilio REST] Failed to redirect inbound call ${inboundCallSid} to voicemail:`, err);
-        }
-      } else {
-        console.log(`[Twilio Mock] Redirecting inbound caller ${inboundCallSid} to voicemail prompt (mock mode).`);
-      }
-
+      const ownerTwiml = await callSessionService.processDeclineTransfer(inboundCallSid, department);
       res.type('text/xml');
       res.send(ownerTwiml);
     } catch (error: unknown) {
@@ -200,12 +147,7 @@ export function createWebhooksRouter(callSessionService: CallSessionService): Ro
         await callSessionService.updateRecordingUrl(inboundCallSid, recordingUrl);
       }
 
-      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say voice="Polly.Joanna-Neural">Your message has been recorded. Thank you for calling. Goodbye.</Say>
-  <Hangup />
-</Response>`;
-
+      const twiml = callSessionService.generateVoicemailCallbackTwiML();
       res.type('text/xml');
       res.send(twiml);
     } catch (error: unknown) {

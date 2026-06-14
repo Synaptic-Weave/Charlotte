@@ -1,6 +1,7 @@
 import { EntityManager } from '@mikro-orm/postgresql';
 
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcrypt';
 import { Tenant } from '../domain/entities/Tenant.js';
 import { User } from '../domain/entities/User.js';
 import { Organization } from '../domain/entities/Organization.js';
@@ -11,7 +12,8 @@ const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev-only-123';
 export class AuthService {
   constructor(private readonly em: EntityManager) {}
 
-  async registerUser(tenantName: string, destinationNumber: string, email: string, passwordHash: string) {
+  async registerUser(tenantName: string, destinationNumber: string, email: string, password: string) {
+    const passwordHash = await bcrypt.hash(password, 12);
     const tenant = Tenant.create(tenantName, destinationNumber);
     const context = { tenantId: tenant.id };
 
@@ -80,6 +82,31 @@ export class AuthService {
       await txEm.flush();
       return tenant;
     });
+  }
+
+  async loginUser(email: string, password: string) {
+    const fork = this.em.fork();
+    const user = await fork.findOne(User, { email }, { populate: ['tenant'] });
+    if (!user) {
+      throw new Error('Invalid email or password credentials.');
+    }
+
+    const matches = await bcrypt.compare(password, user.passwordHash);
+    if (!matches) {
+      throw new Error('Invalid email or password credentials.');
+    }
+
+    const token = jwt.sign(
+      {
+        tenantId: user.tenant.id,
+        userId: user.id,
+        role: user.role
+      },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    return { user, token };
   }
 
   async findUserByEmail(email: string): Promise<User | null> {
