@@ -1,10 +1,6 @@
 import { Router } from 'express';
-import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
 import { AuthService } from '../services/AuthService.js';
 import { authenticateToken } from '../middleware/auth.js';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev-only-123';
 
 export function createAuthRouter(authService: AuthService): Router {
   const router = Router();
@@ -29,14 +25,11 @@ export function createAuthRouter(authService: AuthService): Router {
         return;
       }
 
-      // Hash user password
-      const passwordHash = await bcrypt.hash(password, 12);
-
       const { tenant, token } = await authService.registerUser(
         tenantName.trim(),
         destinationNumber.trim(),
         email.toLowerCase().trim(),
-        passwordHash
+        password
       );
 
       res.status(201).json({
@@ -68,30 +61,14 @@ export function createAuthRouter(authService: AuthService): Router {
         return;
       }
 
-      // Find user globally
-      const user = await authService.findUserByEmail(email.toLowerCase().trim());
-      if (!user) {
+      let loginResult;
+      try {
+        loginResult = await authService.loginUser(email.toLowerCase().trim(), password);
+      } catch {
         res.status(401).json({ error: 'Invalid email or password credentials.' });
         return;
       }
-
-      // Match password credentials
-      const matches = await bcrypt.compare(password, user.passwordHash);
-      if (!matches) {
-        res.status(401).json({ error: 'Invalid email or password credentials.' });
-        return;
-      }
-
-      // Build active JWT Bearer Token
-      const token = jwt.sign(
-        {
-          tenantId: user.tenant.id,
-          userId: user.id,
-          role: user.role
-        },
-        JWT_SECRET,
-        { expiresIn: '24h' }
-      );
+      const { user, token } = loginResult;
 
       res.status(200).json({
         message: 'Authentication successful.',

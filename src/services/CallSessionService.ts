@@ -1,3 +1,4 @@
+import twilio from 'twilio';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { CallSession } from '../domain/entities/CallSession.js';
 import { tenantLocalStorage, runInTenantTransaction } from '../db/context.js';
@@ -5,7 +6,113 @@ import { Tenant } from '../domain/entities/Tenant.js';
 import { TwilioPhoneNumber } from '../domain/entities/TwilioPhoneNumber.js';
 
 export class CallSessionService {
-  constructor(private readonly em: EntityManager) {}
+  private twilioClient: twilio.Twilio | null;
+
+  constructor(private readonly em: EntityManager) {
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    const isTwilioConfigured = accountSid && authToken && accountSid.startsWith('AC') && !accountSid.startsWith('ACXX') && !accountSid.startsWith('AC000');
+    this.twilioClient = isTwilioConfigured ? twilio(accountSid, authToken) : null;
+  }
+
+  generateErrorTwiML(): string {
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="Polly.Joanna-Neural">We're sorry, but the application could not find a subscriber for this number. Goodbye.</Say>
+  <Hangup />
+</Response>`;
+  }
+
+  generateStreamTwiML(streamUrl: string, tenantId: string, callSid: string, dialedNumber: string, callerNumber: string): string {
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Connect>
+    <Stream url="${streamUrl}">
+      <Parameter name="tenantId" value="${tenantId}" />
+      <Parameter name="callSid" value="${callSid}" />
+      <Parameter name="dialedNumber" value="${dialedNumber}" />
+      <Parameter name="callerNumber" value="${callerNumber}" />
+    </Stream>
+  </Connect>
+</Response>`;
+  }
+
+  generateTransferWhisperTwiML(inboundCallSid: string, department: string): string {
+    const escapeXml = (unsafe: string) => unsafe.replace(/[<>&'"]/g, (c) => {
+      switch (c) {
+        case '<': return '&lt;';
+        case '>': return '&gt;';
+        case '&': return '&amp;';
+        case '\'': return '&apos;';
+        case '"': return '&quot;';
+        default: return c;
+      }
+    });
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Gather action="/api/webhook/twilio/transfer-decision?inboundCallSid=${inboundCallSid}&amp;department=${encodeURIComponent(department)}" numDigits="1" timeout="10">
+    <Say voice="Polly.Joanna-Neural">You have an incoming call from Charlotte for the ${escapeXml(department)} department. Press 1 to accept this call, or press 2 to send it to voicemail.</Say>
+  </Gather>
+  <Redirect>/api/webhook/twilio/transfer-decision?inboundCallSid=${inboundCallSid}&amp;department=${encodeURIComponent(department)}&amp;timeout=true</Redirect>
+</Response>`;
+  }
+
+  generateAcceptTransferTwiML(inboundCallSid: string): string {
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="Polly.Joanna-Neural">Connecting you now.</Say>
+  <Dial>
+    <Conference startConferenceOnEnter="true" endConferenceOnExit="true">Conf_${inboundCallSid}</Conference>
+  </Dial>
+</Response>`;
+  }
+
+  async processDeclineTransfer(inboundCallSid: string, department: string): Promise<string> {
+    const escapeXml = (unsafe: string) => unsafe.replace(/[<>&'"]/g, (c) => {
+      switch (c) {
+        case '<': return '&lt;';
+        case '>': return '&gt;';
+        case '&': return '&amp;';
+        case '\'': return '&apos;';
+        case '"': return '&quot;';
+        default: return c;
+      }
+    });
+
+    if (this.twilioClient) {
+      try {
+        console.log(`[Twilio REST] Redirecting inbound caller ${inboundCallSid} to voicemail prompt...`);
+        await this.twilioClient.calls(inboundCallSid).update({
+          twiml: `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="Polly.Joanna-Neural">I'm sorry, but no one is available in the ${escapeXml(department)} department right now. Please leave a message after the tone.</Say>
+  <Record action="/api/webhook/twilio/voicemail-callback?inboundCallSid=${inboundCallSid}" maxLength="60" playBeep="true" />
+</Response>`
+        });
+        console.log(`[Twilio REST] Inbound call ${inboundCallSid} successfully redirected to voicemail.`);
+      } catch (err: unknown) {
+        console.error(`[Twilio REST] Failed to redirect inbound call ${inboundCallSid} to voicemail:`, err);
+      }
+    } else {
+      console.log(`[Twilio Mock] Redirecting inbound caller ${inboundCallSid} to voicemail prompt (mock mode).`);
+    }
+
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="Polly.Joanna-Neural">Thank you. The caller will be sent to voicemail. Goodbye.</Say>
+  <Hangup />
+</Response>`;
+  }
+
+  generateVoicemailCallbackTwiML(): string {
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="Polly.Joanna-Neural">Your message has been recorded. Thank you for calling. Goodbye.</Say>
+  <Hangup />
+</Response>`;
+  }
+
+
 
   async getActiveTenant(tenantId: string): Promise<Tenant | null> {
     return await runInTenantTransaction(this.em, async (txEm) => {

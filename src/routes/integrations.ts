@@ -1,18 +1,9 @@
 import { Router, Request, Response } from 'express';
-import { google } from 'googleapis';
 import { IntegrationService } from '../services/IntegrationService.js';
 import { authenticateToken } from '../middleware/auth.js';
 
 export function createIntegrationsRouter(integrationService: IntegrationService): Router {
   const router = Router();
-
-  const getOauth2Client = () => {
-    return new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID || 'mock_client_id',
-      process.env.GOOGLE_CLIENT_SECRET || 'mock_client_secret',
-      process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/api/integrations/google/callback'
-    );
-  };
 
   router.get('/google/auth', authenticateToken, (req: Request, res: Response) => {
     const context = req.context;
@@ -21,14 +12,13 @@ export function createIntegrationsRouter(integrationService: IntegrationService)
       return;
     }
     
-    const oauth2Client = getOauth2Client();
-    const url = oauth2Client.generateAuthUrl({
-      access_type: 'offline',
-      prompt: 'consent',
-      scope: ['https://www.googleapis.com/auth/calendar', 'https://www.googleapis.com/auth/calendar.events'],
-      state: context.tenantId,
-    });
-    res.json({ url });
+    try {
+      const url = integrationService.generateAuthUrl(context.tenantId);
+      res.json({ url });
+    } catch (error: unknown) {
+      console.error('Error generating Google auth URL:', error);
+      res.status(500).json({ error: 'Failed to generate auth URL.' });
+    }
   });
 
   router.post('/google/callback', async (req: Request, res: Response) => {
@@ -39,14 +29,7 @@ export function createIntegrationsRouter(integrationService: IntegrationService)
     }
 
     try {
-      const tenantId = state as string;
-      const oauth2Client = getOauth2Client();
-      const { tokens } = await oauth2Client.getToken(code as string);
-      
-      if (tokens.refresh_token) {
-        await integrationService.updateGoogleRefreshToken(tenantId, tokens.refresh_token);
-      }
-
+      await integrationService.exchangeToken(code as string, state as string);
       res.json({ success: true });
     } catch (error: unknown) {
       console.error('Google OAuth callback error', error);
@@ -62,22 +45,15 @@ export function createIntegrationsRouter(integrationService: IntegrationService)
         return;
       }
       
-      const tenantId = context.tenantId;
-      const tenant = await integrationService.getTenant(tenantId);
-      
-      if (!tenant.googleRefreshToken) {
-        res.status(400).json({ error: 'Google Calendar not connected' });
-        return;
-      }
-
-      const oauth2Client = getOauth2Client();
-      oauth2Client.setCredentials({ refresh_token: tenant.googleRefreshToken });
-      const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-      const response = await calendar.calendarList.list();
-      res.json({ calendars: response.data.items || [] });
+      const calendars = await integrationService.getCalendars(context.tenantId);
+      res.json({ calendars });
     } catch (error: unknown) {
       console.error('Failed to fetch calendars', error);
-      res.status(500).json({ error: 'Failed to fetch calendars' });
+      if (error instanceof Error && error.message === 'Google Calendar not connected') {
+        res.status(400).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: 'Failed to fetch calendars' });
+      }
     }
   });
 
