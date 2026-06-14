@@ -1,10 +1,11 @@
+ 
 process.env.GEMINI_API_KEY = 'real-key';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { EventEmitter } from 'events';
 
 const { mockSendToolResponse, mockConnect } = vi.hoisted(() => {
   const mockSendToolResponse = vi.fn();
-  const mockConnect: any = vi.fn().mockImplementation((config) => {
+  const mockConnect: unknown = vi.fn().mockImplementation((config) => {
     mockConnect.config = config;
     return Promise.resolve({
       sendToolResponse: mockSendToolResponse,
@@ -50,7 +51,7 @@ const mockCustomerServiceConstructor = vi.fn();
 
 vi.mock('../src/services/CustomerService.js', () => ({
   CustomerService: class {
-    constructor(em: any) {
+    constructor(em: unknown) {
       mockCustomerServiceConstructor(em);
     }
     findByPhoneNumber = mockFindByPhoneNumber;
@@ -62,7 +63,7 @@ const mockAppointmentServiceConstructor = vi.fn();
 
 vi.mock('../src/services/AppointmentService.js', () => ({
   AppointmentService: class {
-    constructor(em: any) {
+    constructor(em: unknown) {
       mockAppointmentServiceConstructor(em);
     }
     bookAppointment = mockBookAppointment;
@@ -70,10 +71,10 @@ vi.mock('../src/services/AppointmentService.js', () => ({
 }));
 
 describe('Streams Route - Tool Calls', () => {
-  let mockEm: any;
-  let mockFork: any;
+  let mockEm: unknown;
+  let mockFork: unknown;
   let mockWsServer: EventEmitter;
-  let registerStreamHandler: any;
+  let registerStreamHandler: unknown;
   
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -81,7 +82,7 @@ describe('Streams Route - Tool Calls', () => {
     const mod = await import('../src/routes/streams.js');
     registerStreamHandler = mod.registerStreamHandler;
     
-    const mockFindOne = vi.fn().mockImplementation((entity: any) => {
+    const mockFindOne = vi.fn().mockImplementation((entity: unknown) => {
       if (entity.name === 'Tenant') {
         return Promise.resolve({ 
           id: 'test-tenant', 
@@ -118,10 +119,10 @@ describe('Streams Route - Tool Calls', () => {
 
   it('should fork EntityManager when handling list_calendar_events tool call', async () => {
     // 1. Register stream handler
-    registerStreamHandler(mockWsServer as any, mockEm);
+    registerStreamHandler(mockWsServer as unknown, mockEm);
 
     // 2. Simulate WS connection
-    const ws = new EventEmitter() as any;
+    const ws = new EventEmitter() as unknown;
     ws.send = vi.fn();
     ws.close = vi.fn();
     
@@ -170,9 +171,9 @@ describe('Streams Route - Tool Calls', () => {
   });
 
   it('should fork EntityManager when handling query_crm tool call', async () => {
-    registerStreamHandler(mockWsServer as any, mockEm);
+    registerStreamHandler(mockWsServer as unknown, mockEm);
 
-    const ws = new EventEmitter() as any;
+    const ws = new EventEmitter() as unknown;
     ws.send = vi.fn();
     ws.close = vi.fn();
     
@@ -214,9 +215,9 @@ describe('Streams Route - Tool Calls', () => {
   });
 
   it('should fork EntityManager when handling book_appointment tool call', async () => {
-    registerStreamHandler(mockWsServer as any, mockEm);
+    registerStreamHandler(mockWsServer as unknown, mockEm);
 
-    const ws = new EventEmitter() as any;
+    const ws = new EventEmitter() as unknown;
     ws.send = vi.fn();
     ws.close = vi.fn();
     

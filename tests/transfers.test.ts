@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import express from 'express';
 import http from 'http';
@@ -14,12 +15,12 @@ import { OrganizationSchema } from '../src/domain/schemas/Organization.schema.js
 import { TwilioPhoneNumberSchema } from '../src/domain/schemas/TwilioPhoneNumber.schema.js';
 import { CallSessionSchema } from '../src/domain/schemas/CallSession.schema.js';
 import { tenantLocalStorage, runInTenantTransaction } from '../src/db/context.js';
-let createWebhooksRouter: any;
-let registerStreamHandler: any;
+let createWebhooksRouter: unknown;
+let registerStreamHandler: unknown;
 
 // Define globals to capture Google GenAI ADK callbacks
-let storedCallbacks: any = null;
-let storedSession: any = null;
+let storedCallbacks: unknown = null;
+let storedSession: unknown = null;
 
 // Mock Google GenAI Live Connection
 vi.mock('@google/genai', () => {
@@ -58,7 +59,7 @@ const mockCalls = vi.fn((sid) => {
     update: mockCallsUpdate,
   };
 });
-(mockCalls as any).create = mockCallsCreate;
+(mockCalls as unknown).create = mockCallsCreate;
 
 const mockTwilioClient = {
   calls: mockCalls,
@@ -66,7 +67,7 @@ const mockTwilioClient = {
 
 vi.mock('twilio', () => {
   const mockFn = vi.fn(() => mockTwilioClient);
-  (mockFn as any).validateRequest = vi.fn().mockReturnValue(true);
+  (mockFn as unknown).validateRequest = vi.fn().mockReturnValue(true);
   return {
     default: mockFn,
   };
@@ -91,7 +92,7 @@ async function setupTestDatabase(): Promise<string> {
       await client.connect();
       await client.end();
       return url;
-    } catch (e) {
+    } catch {
       // Ignore and try next
     }
   }
@@ -104,7 +105,7 @@ async function setupTestDatabase(): Promise<string> {
     if (res.rowCount === 0) {
       await client.query("CREATE DATABASE charlotte_db");
     }
-  } catch (e) {
+  } catch {
     throw new Error('Could not resolve postgres connection or create charlotte_db.');
   } finally {
     await client.end();
@@ -182,7 +183,7 @@ describe('Charlotte Warm Transfer & Call Bridging Integration Tests', () => {
     registerStreamHandler(wss, orm.em);
 
     await new Promise<void>((resolve) => server.listen(0, () => resolve()));
-    port = (server.address() as any).port;
+    port = (server.address() as unknown).port;
     baseUrl = `http://localhost:${port}`;
     wsUrl = `ws://localhost:${port}/api/streams`;
   });

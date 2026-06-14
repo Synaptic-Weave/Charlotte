@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { MikroORM } from '@mikro-orm/postgresql';
 import { Client } from 'pg';
@@ -35,7 +36,7 @@ async function setupTestDatabase(): Promise<string> {
       await client.end();
       console.log(`Successfully connected directly to charlotte_db using: ${url.replace(/:[^:@]+@/, ':***@')}`);
       return url;
-    } catch (e) {
+    } catch {
       // Ignore and try next
     }
   }
@@ -58,7 +59,7 @@ async function setupTestDatabase(): Promise<string> {
       systemUrl = url;
       console.log(`Successfully connected to administrative postgres db using: ${url.replace(/:[^:@]+@/, ':***@')}`);
       break;
-    } catch (e) {
+    } catch {
       // Ignore
     }
   }

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import express from 'express';
 import http from 'http';
@@ -33,7 +34,7 @@ async function setupTestDatabase(): Promise<string> {
       await client.connect();
       await client.end();
       return url;
-    } catch (e) {
+    } catch {
       // Ignore
     }
   }
@@ -46,7 +47,7 @@ async function setupTestDatabase(): Promise<string> {
     if (res.rowCount === 0) {
       await client.query("CREATE DATABASE charlotte_db");
     }
-  } catch (e) {
+  } catch {
     throw new Error('Could not resolve postgres connection or create charlotte_db.');
   } finally {
     await client.end();
@@ -162,7 +163,7 @@ describe('Charlotte Calls & Transcript RLS Endpoint Integration Tests', () => {
 
     server = http.createServer(app);
     await new Promise<void>((resolve) => server.listen(0, () => resolve()));
-    port = (server.address() as any).port;
+    port = (server.address() as unknown).port;
     baseUrl = `http://localhost:${port}`;
   });
 

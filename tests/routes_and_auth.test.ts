@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import express from 'express';
 import http from 'http';
@@ -15,8 +16,8 @@ import { OrganizationSchema } from '../src/domain/schemas/Organization.schema.js
 import { TwilioPhoneNumberSchema } from '../src/domain/schemas/TwilioPhoneNumber.schema.js';
 import { authenticateToken } from '../src/middleware/auth.js';
 
-let createAuthRouter: any;
-let createNumbersRouter: any;
+let createAuthRouter: unknown;
+let createNumbersRouter: unknown;
 
 const JWT_SECRET = process.env.JWT_SECRET || 'charlotte_super_secret_jwt_sign_key_change_me_in_production';
 
@@ -36,7 +37,7 @@ async function setupTestDatabase(): Promise<string> {
       await client.connect();
       await client.end();
       return url;
-    } catch (e) {
+    } catch {
       // Ignore and try next
     }
   }
@@ -50,7 +51,7 @@ async function setupTestDatabase(): Promise<string> {
     if (res.rowCount === 0) {
       await client.query("CREATE DATABASE charlotte_db");
     }
-  } catch (e) {
+  } catch {
     throw new Error('Could not resolve postgres connection or create charlotte_db.');
   } finally {
     await client.end();
@@ -158,7 +159,7 @@ describe('Charlotte API Routes and Authentication Middleware Integration Tests',
 
     server = http.createServer(app);
     await new Promise<void>((resolve) => server.listen(0, () => resolve()));
-    port = (server.address() as any).port;
+    port = (server.address() as unknown).port;
     baseUrl = `http://localhost:${port}`;
     console.log(`[Test Server] Routes & Auth Test Server running on ${baseUrl}`);
   });
@@ -390,7 +391,7 @@ describe('Charlotte API Routes and Authentication Middleware Integration Tests',
         expect(data.tenant.name).toBe('Routes Integration Tenant Ltd');
 
         // Check JWT payload structure
-        const decoded = jwt.decode(data.token) as any;
+        const decoded = jwt.decode(data.token) as unknown;
         expect(decoded).toBeDefined();
         expect(decoded.userId).toBe(seededUser.id);
         expect(decoded.tenantId).toBe(seededTenant.id);
@@ -597,7 +598,7 @@ describe('Charlotte API Routes and Authentication Middleware Integration Tests',
         expect(data.numbers).toBeDefined();
         // We provisioned one number in the previous test case
         expect(data.numbers.length).toBeGreaterThanOrEqual(1);
-        const matches = data.numbers.filter((num: any) => num.phoneNumber === '+15125559000');
+        const matches = data.numbers.filter((num: unknown) => num.phoneNumber === '+15125559000');
         expect(matches.length).toBe(1);
         expect(matches[0].friendlyName).toBe('Acme Test Desk Line');
       });
@@ -620,7 +621,7 @@ describe('Charlotte API Routes and Authentication Middleware Integration Tests',
         const data = await response.json();
         
         // Assert Tenant A only sees their numbers, not Tenant B's
-        const matchB = data.numbers.filter((num: any) => num.phoneNumber === '+15550003333');
+        const matchB = data.numbers.filter((num: unknown) => num.phoneNumber === '+15550003333');
         expect(matchB.length).toBe(0);
 
         // Cleanup Tenant B

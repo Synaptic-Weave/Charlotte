@@ -1,3 +1,4 @@
+ 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import express from 'express';
 import http from 'http';
@@ -38,8 +39,8 @@ import { createIntegrationsRouter } from '../src/routes/integrations.js';
 describe('Integrations Router (Unit)', () => {
   let server: http.Server;
   let baseUrl: string;
-  let mockEm: any;
-  let mockFork: any;
+  let mockEm: unknown;
+  let mockFork: unknown;
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -57,7 +58,7 @@ describe('Integrations Router (Unit)', () => {
     
     server = http.createServer(app);
     await new Promise<void>((resolve) => server.listen(0, () => resolve()));
-    const port = (server.address() as any).port;
+    const port = (server.address() as unknown).port;
     baseUrl = `http://localhost:${port}`;
   });
 

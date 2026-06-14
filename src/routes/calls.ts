@@ -1,49 +1,34 @@
 import { Router } from 'express';
-import { EntityManager } from '@mikro-orm/postgresql';
-import { Tenant } from '../domain/entities/Tenant.js';
-import { CallSession } from '../domain/entities/CallSession.js';
-import { runInTenantTransaction } from '../db/context.js';
+import { CallSessionService } from '../services/CallSessionService.js';
 import { authenticateToken } from '../middleware/auth.js';
-import { broadcastDashboardUpdate } from './streams.js';
+import { broadcastDashboardUpdate } from '../utils/websocketBroadcaster.js';
 
+// Helper to format timestamps gracefully
 function formatTime(date: Date): string {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-
-  const d = new Date(date);
-  const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  
-  if (d >= today) {
-    return `Today, ${timeStr}`;
-  } else if (d >= yesterday) {
-    return `Yesterday, ${timeStr}`;
-  } else {
-    return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${timeStr}`;
-  }
+  return new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    minute: 'numeric',
+    hour12: true,
+  }).format(date);
 }
 
-function formatDuration(createdAt: Date, updatedAt: Date, status: string): string {
-  if (status === 'initiated' || status === 'active') {
-    return 'Streaming';
-  }
-  const ms = updatedAt.getTime() - createdAt.getTime();
-  const seconds = Math.floor(ms / 1000);
-  if (seconds < 1) return '0s';
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  return remainingSeconds > 0 ? `${minutes}m ${remainingSeconds}s` : `${minutes}m`;
+// Helper to calculate call duration gracefully
+function formatDuration(start: Date, end: Date, status: string): string {
+  if (status === 'active' || status === 'initiated') return 'Streaming';
+  const durationMs = end.getTime() - start.getTime();
+  const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
-export function createCallsRouter(em: EntityManager): Router {
+export function createCallsRouter(callSessionService: CallSessionService): Router {
   const router = Router();
 
   /**
-   * GET /api/tenants/calls/
+   * GET /api/tenants/calls
    * Guarded by authenticateToken
-   * Retrieve all historical and active call sessions for the tenant
+   * Retrieve tenant-scoped call history
    */
   router.get('/', authenticateToken, async (req, res) => {
     try {
@@ -53,41 +38,32 @@ export function createCallsRouter(em: EntityManager): Router {
         return;
       }
 
-      const limit = typeof req.query.limit === 'string' ? parseInt(req.query.limit, 10) : 15;
-      const offset = typeof req.query.offset === 'string' ? parseInt(req.query.offset, 10) : 0;
+      const limit = parseInt(req.query.limit as string, 10);
+      const offset = parseInt(req.query.offset as string, 10);
+      
+      const queryLimit = isNaN(limit) ? 15 : limit;
+      const queryOffset = isNaN(offset) ? 0 : offset;
 
-      const result = await runInTenantTransaction(em, async (txEm) => {
-        const [callSessions, count] = await txEm.findAndCount(
-          CallSession,
-          { tenant: { id: tenantId } },
-          {
-            orderBy: { createdAt: 'DESC' },
-            limit: isNaN(limit) ? 15 : limit,
-            offset: isNaN(offset) ? 0 : offset,
-          }
-        );
+      const { callSessions, count } = await callSessionService.getCalls(tenantId, queryLimit, queryOffset);
 
-        const mapped = callSessions.map((session) => ({
-          id: session.id,
-          caller: session.callerNumber,
-          phone: session.callerNumber,
-          time: formatTime(session.createdAt),
-          duration: formatDuration(session.createdAt, session.updatedAt, session.status),
-          status: session.status === 'active' || session.status === 'initiated' ? 'active' : 'completed',
-          messages: session.messages || [],
-        }));
+      const mapped = callSessions.map((session) => ({
+        id: session.id,
+        caller: session.callerNumber,
+        phone: session.callerNumber,
+        time: formatTime(session.createdAt),
+        duration: formatDuration(session.createdAt, session.updatedAt, session.status),
+        status: session.status === 'active' || session.status === 'initiated' ? 'active' : 'completed',
+        messages: session.messages || [],
+      }));
 
-        return {
-          calls: mapped,
-          total: count,
-          hasMore: (isNaN(offset) ? 0 : offset) + callSessions.length < count,
-        };
+      res.status(200).json({
+        calls: mapped,
+        total: count,
+        hasMore: queryOffset + callSessions.length < count,
       });
-
-      res.status(200).json(result);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error fetching call sessions:', error);
-      res.status(500).json({ error: error.message || 'Internal server error occurred fetching calls.' });
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error occurred fetching calls.' });
     }
   });
 
@@ -104,40 +80,11 @@ export function createCallsRouter(em: EntityManager): Router {
         return;
       }
 
-      const stats = await runInTenantTransaction(em, async (txEm) => {
-        const callSessions = await txEm.find(CallSession, { tenant: { id: tenantId } });
-        
-        const totalCalls = callSessions.length;
-        
-        // Calculate average duration in seconds
-        const completedCalls = callSessions.filter(c => c.status === 'completed');
-        let totalDurationMs = 0;
-        completedCalls.forEach(c => {
-          totalDurationMs += c.updatedAt.getTime() - c.createdAt.getTime();
-        });
-        
-        const avgDurationSeconds = completedCalls.length > 0 
-          ? Math.round((totalDurationMs / completedCalls.length) / 1000) 
-          : 0;
-
-        // Calculate Answer Rate: percentage of connected (active/completed) calls vs total calls
-        const initiatedCount = callSessions.filter(c => c.status === 'initiated').length;
-        const answeredCount = totalCalls - initiatedCount;
-        const answerRate = totalCalls > 0 
-          ? Math.round((answeredCount / totalCalls) * 1000) / 10 
-          : 100.0;
-
-        return {
-          totalCalls,
-          avgDurationSeconds,
-          answerRate,
-        };
-      });
-
+      const stats = await callSessionService.getCallStats(tenantId);
       res.status(200).json(stats);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error fetching call stats:', error);
-      res.status(500).json({ error: error.message || 'Internal server error occurred fetching stats.' });
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error occurred fetching stats.' });
     }
   });
 
@@ -155,18 +102,7 @@ export function createCallsRouter(em: EntityManager): Router {
         return;
       }
 
-      const session = await runInTenantTransaction(em, async (txEm) => {
-        const tenant = await txEm.findOne(Tenant, { id: tenantId } as any);
-        if (!tenant) {
-          throw new Error('Tenant organization not found.');
-        }
-
-        const actualCallSid = callSid || `mock-sid-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-        const callSession = CallSession.create(tenant, actualCallSid, callerNumber || 'Unknown');
-        txEm.persist(callSession);
-        await txEm.flush();
-        return callSession;
-      });
+      const session = await callSessionService.createCall(tenantId, callSid, callerNumber);
 
       broadcastDashboardUpdate(tenantId, { event: 'calls_updated' });
 
@@ -182,9 +118,9 @@ export function createCallsRouter(em: EntityManager): Router {
           messages: [],
         },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error creating call session:', error);
-      res.status(500).json({ error: error.message || 'Internal server error occurred creating call.' });
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error occurred creating call.' });
     }
   });
 
@@ -209,25 +145,7 @@ export function createCallsRouter(em: EntityManager): Router {
         return;
       }
 
-      const result = await runInTenantTransaction(em, async (txEm) => {
-        const callSession = await txEm.findOne(CallSession, { id });
-        if (!callSession) {
-          throw new Error('Call session not found.');
-        }
-
-        const timeStr = timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        const newMsg = {
-          id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-          speaker,
-          text,
-          timestamp: timeStr,
-        };
-
-        callSession.addMessage(newMsg);
-        txEm.persist(callSession);
-        await txEm.flush();
-        return callSession;
-      });
+      const result = await callSessionService.addMessageToSessionById(id, speaker, text, timestamp);
 
       broadcastDashboardUpdate(tenantId, { event: 'calls_updated' });
 
@@ -235,9 +153,9 @@ export function createCallsRouter(em: EntityManager): Router {
         message: 'Transcript message added successfully.',
         messages: result.messages,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error adding transcript message:', error);
-      res.status(500).json({ error: error.message || 'Internal server error occurred adding message.' });
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error occurred adding message.' });
     }
   });
 
@@ -257,23 +175,7 @@ export function createCallsRouter(em: EntityManager): Router {
         return;
       }
 
-      const result = await runInTenantTransaction(em, async (txEm) => {
-        const callSession = await txEm.findOne(CallSession, { id });
-        if (!callSession) {
-          throw new Error('Call session not found.');
-        }
-
-        if (status) {
-          callSession.updateStatus(status);
-        }
-        if (streamSid) {
-          callSession.updateStreamSid(streamSid);
-        }
-
-        txEm.persist(callSession);
-        await txEm.flush();
-        return callSession;
-      });
+      const result = await callSessionService.updateCallSessionById(id, status, streamSid);
 
       broadcastDashboardUpdate(tenantId, { event: 'calls_updated' });
 
@@ -289,9 +191,9 @@ export function createCallsRouter(em: EntityManager): Router {
           messages: result.messages || [],
         },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error updating call session:', error);
-      res.status(500).json({ error: error.message || 'Internal server error occurred updating call.' });
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Internal server error occurred updating call.' });
     }
   });
 
