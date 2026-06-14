@@ -33,6 +33,10 @@ export default tseslint.config(
               name: "@mikro-orm/postgresql",
               message: "Do not import MikroORM directly in routes. Use service/repository layers.",
             },
+            {
+              name: "knex",
+              message: "Do not import knex directly in routes. Use service/repository layers.",
+            },
           ],
         },
       ],
