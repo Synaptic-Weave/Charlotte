@@ -12,6 +12,10 @@ import { createWebhooksRouter } from './routes/webhooks.js';
 import { createCallsRouter } from './routes/calls.js';
 import { createIntegrationsRouter } from './routes/integrations.js';
 import { registerStreamHandler } from './routes/streams.js';
+import { CallSessionService } from './services/CallSessionService.js';
+import { VoiceToolService } from './services/VoiceToolService.js';
+import { AppointmentService } from './services/AppointmentService.js';
+import { CustomerService } from './services/CustomerService.js';
 
 const PORT = Number(process.env.PORT || 8080);
 const app = express();
@@ -29,7 +33,11 @@ async function bootstrap() {
   await orm.getMigrator().up();
 
   // Register real-time voice streaming audio bridge
-  registerStreamHandler(wss, orm.em);
+  const callSessionSvc = new CallSessionService(orm.em);
+  const voiceToolSvc = new VoiceToolService(orm.em);
+  const appointmentSvc = new AppointmentService(orm.em);
+  const customerSvc = new CustomerService(orm.em);
+  registerStreamHandler(wss, callSessionSvc, voiceToolSvc, appointmentSvc, customerSvc);
 
   // Basic Middleware
   app.use(cors({

@@ -1,19 +1,16 @@
 import { WebSocket, WebSocketServer, RawData } from 'ws';
 import { IncomingMessage } from 'http';
-
+import { EntityManager } from '@mikro-orm/postgresql';
 import twilio from 'twilio';
 // Uses the Google GenAI SDK directly for Gemini Live voice streaming.
 // TODO: migrate to @google/adk once ADK supports real-time audio bidirectional streaming.
 import { GoogleGenAI } from '@google/genai';
 import jwt from 'jsonwebtoken';
-import { tenantLocalStorage } from '../db/context.js';
-import { transcodeTwilioToGemini, transcodeGeminiToTwilio, downsample24kHzTo8kHzWithCarryover, encodeMuLawBuffer } from '../services/transcoder.js';
-import { LiveServerMessage, Type, Session } from '@google/genai';
 import { Tenant } from '../domain/entities/Tenant.js';
-import { CallSessionService } from '../services/CallSessionService.js';
-import { VoiceToolService } from '../services/VoiceToolService.js';
-import { AppointmentService } from '../services/AppointmentService.js';
-import { CustomerService } from '../services/CustomerService.js';
+import { CallSession } from '../domain/entities/CallSession.js';
+import { TwilioPhoneNumber } from '../domain/entities/TwilioPhoneNumber.js';
+import { tenantLocalStorage, runInTenantTransaction } from '../db/context.js';
+import { transcodeTwilioToGemini, transcodeGeminiToTwilio, downsample24kHzTo8kHzWithCarryover, encodeMuLawBuffer } from '../services/transcoder.js';
 
 // Setup Twilio Client
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
@@ -35,7 +32,7 @@ export interface DashboardClient {
 
 export const dashboardClients = new Set<DashboardClient>();
 
-export function broadcastDashboardUpdate(tenantId: string, payload: unknown): void {
+export function broadcastDashboardUpdate(tenantId: string, payload: any): void {
   const message = JSON.stringify(payload);
   console.log(`[WebSocket Broadcast] Broadcasting updates to tenant ${tenantId}. Payload:`, payload);
   for (const client of dashboardClients) {
@@ -49,7 +46,7 @@ export function broadcastDashboardUpdate(tenantId: string, payload: unknown): vo
   }
 }
 
-export function registerStreamHandler(wss: WebSocketServer, callSessionSvc: CallSessionService, voiceToolSvc: VoiceToolService, appointmentSvc: AppointmentService, customerSvc: CustomerService): void {
+export function registerStreamHandler(wss: WebSocketServer, em: EntityManager): void {
   wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
     const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
 
@@ -101,7 +98,7 @@ export function registerStreamHandler(wss: WebSocketServer, callSessionSvc: Call
     let streamSid: string | null = null;
     let callSid: string | null = null;
     let tenantId: string | null = null;
-    let geminiSession: Session | null = null;
+    let geminiSession: any = null;
     let activeTenant: Tenant | null = null;
     let dialedNumber: string | null = null;
     let leftoverSamples: Int16Array = new Int16Array(0);
@@ -136,26 +133,48 @@ export function registerStreamHandler(wss: WebSocketServer, callSessionSvc: Call
 
             // Execute DB resolution and updates under RLS context
             await tenantLocalStorage.run({ tenantId }, async () => {
-              const tenant = await callSessionSvc.getActiveTenant(tenantId!);
-              if (!tenant) {
-                throw new Error(`Tenant with ID ${tenantId} not found.`);
-              }
-              activeTenant = tenant;
-
-              if (!dialedNumber) {
-                const fbNumber = await callSessionSvc.getFallbackDialedNumber(tenantId!);
-                if (fbNumber) {
-                  dialedNumber = fbNumber;
-                  console.log(`[Twilio Stream] Resolved dialed phone number from DB fallback: ${dialedNumber}`);
+              await runInTenantTransaction(em, async (txEm) => {
+                // Fetch tenant info
+                activeTenant = await txEm.findOne(Tenant, { id: tenantId } as any);
+                if (!activeTenant) {
+                  throw new Error(`Tenant with ID ${tenantId} not found.`);
                 }
-              } else {
-                console.log(`[Twilio Stream] Using dialed phone number from custom parameters: ${dialedNumber}`);
-              }
 
-              const greetingText = tenant.agentGreeting || "Hello, how can I help you today?";
-              await callSessionSvc.updateCallStatus(callSid!, streamSid!, 'active', greetingText);
-              console.log(`[Twilio Stream] Updated CallSession for CallSid ${callSid} state to "active" and appended welcome greeting.`);
-              broadcastDashboardUpdate(tenantId!, { event: 'calls_updated' });
+                // Fetch dialed phone number for the tenant as fallback
+                if (!dialedNumber) {
+                  const phoneRecord = await txEm.findOne(TwilioPhoneNumber, { tenant: activeTenant });
+                  if (phoneRecord) {
+                    dialedNumber = phoneRecord.phoneNumber;
+                    console.log(`[Twilio Stream] Resolved dialed phone number from DB fallback: ${dialedNumber}`);
+                  }
+                } else {
+                  console.log(`[Twilio Stream] Using dialed phone number from custom parameters: ${dialedNumber}`);
+                }
+
+                // Retrieve and update CallSession status
+                const callSession = await txEm.findOne(CallSession, { callSid });
+                if (callSession) {
+                  callSession.updateStreamSid(streamSid!);
+                  callSession.updateStatus('active');
+
+                  // Manually append the welcome greeting to the database transcript immediately
+                  const greetingText = `Hello, thanks for calling ${activeTenant.name}, how can I assist you?`;
+                  const greetingMsg = {
+                    id: `msg-greet-${Date.now()}`,
+                    speaker: 'charlotte' as const,
+                    text: greetingText,
+                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                  };
+                  callSession.addMessage(greetingMsg);
+
+                  txEm.persist(callSession);
+                  await txEm.flush();
+                  console.log(`[Twilio Stream] Updated CallSession ${callSession.id} state to "active" and appended welcome greeting.`);
+                  broadcastDashboardUpdate(tenantId!, { event: 'calls_updated' });
+                } else {
+                  console.error(`[Twilio Stream] CallSession with CallSid ${callSid} not found in database.`);
+                }
+              });
             });
 
             if (!activeTenant) {
@@ -174,7 +193,7 @@ export function registerStreamHandler(wss: WebSocketServer, callSessionSvc: Call
                 geminiSession = await ai.live.connect({
                   model,
                   config: {
-                    responseModalities: ['AUDIO'],
+                    responseModalities: ['AUDIO'] as any,
                     speechConfig: {
                       voiceConfig: {
                         prebuiltVoiceConfig: {
@@ -200,10 +219,10 @@ Never tell the caller to call another number or try another way; always use the 
                             name: 'transfer_call',
                             description: 'Route or transfer the call to a specific department or human agent.',
                             parameters: {
-                              type: Type.OBJECT,
+                              type: 'OBJECT' as any,
                               properties: {
                                 department: {
-                                  type: Type.STRING,
+                                  type: 'STRING' as any,
                                   description: 'The name of the department or human agent to transfer the call to (e.g. Sales, Support, Billing, Front Desk, or a specific employee name).',
                                 },
                               },
@@ -214,10 +233,10 @@ Never tell the caller to call another number or try another way; always use the 
                             name: 'query_crm',
                             description: 'Query the CRM for customer context using their phone number.',
                             parameters: {
-                              type: Type.OBJECT,
+                              type: 'OBJECT' as any,
                               properties: {
                                 phoneNumber: {
-                                  type: Type.STRING,
+                                  type: 'STRING' as any,
                                   description: 'The phone number of the customer to look up. It should include the country code (e.g. +1).',
                                 },
                               },
@@ -228,18 +247,18 @@ Never tell the caller to call another number or try another way; always use the 
                             name: 'book_appointment',
                             description: 'Book an appointment for a caller.',
                             parameters: {
-                              type: Type.OBJECT,
+                              type: 'OBJECT' as any,
                               properties: {
                                 customerId: {
-                                  type: Type.STRING,
+                                  type: 'STRING' as any,
                                   description: 'The UUID of the customer. You must query_crm first to get this.',
                                 },
                                 departmentName: {
-                                  type: Type.STRING,
+                                  type: 'STRING' as any,
                                   description: 'The name of the department.',
                                 },
                                 dateString: {
-                                  type: Type.STRING,
+                                  type: 'STRING' as any,
                                   description: 'The appointment date and time in ISO 8601 format.',
                                 },
                               },
@@ -250,14 +269,14 @@ Never tell the caller to call another number or try another way; always use the 
                         name: 'list_calendar_events',
                         description: 'List upcoming events from the Google Calendar to find free timeslots. Appointments are 60 minutes long, with a 15 minute buffer.',
                         parameters: {
-                          type: Type.OBJECT,
+                          type: 'OBJECT' as any,
                           properties: {
                             timeMin: {
-                              type: Type.STRING,
+                              type: 'STRING' as any,
                               description: 'The start date and time in ISO 8601 format.',
                             },
                             timeMax: {
-                              type: Type.STRING,
+                              type: 'STRING' as any,
                               description: 'The end date and time in ISO 8601 format.',
                             },
                           },
@@ -269,7 +288,7 @@ Never tell the caller to call another number or try another way; always use the 
                     ],
                   },
                   callbacks: {
-                    onmessage: async (serverMsg: LiveServerMessage) => {
+                    onmessage: async (serverMsg: any) => {
                       try {
                         // Handle real-time audio transcriptions
                         const inputTx = serverMsg.serverContent?.inputTranscription;
@@ -277,9 +296,35 @@ Never tell the caller to call another number or try another way; always use the 
                           const userText = inputTx.text.trim();
                           if (userText) {
                             console.log(`[Twilio Stream] User Transcription: ${userText}`);
-                            await callSessionSvc.addMessageToSession(callSid, 'caller', userText);
-                            console.log(`[Twilio Stream] User transcript appended/merged to CallSession ${callSid}`);
-                            broadcastDashboardUpdate(tenantId!, { event: 'calls_updated' });
+                            await tenantLocalStorage.run({ tenantId }, async () => {
+                              await runInTenantTransaction(em, async (txEm) => {
+                                const callSession = await txEm.findOne(CallSession, { callSid });
+                                if (callSession) {
+                                  const lastMsg = callSession.messages && callSession.messages.length > 0
+                                    ? callSession.messages[callSession.messages.length - 1]
+                                    : null;
+
+                                  if (lastMsg && lastMsg.speaker === 'caller') {
+                                    lastMsg.text = `${lastMsg.text} ${userText}`.trim();
+                                    callSession.messages = [...callSession.messages];
+                                    callSession.updatedAt = new Date();
+                                  } else {
+                                    const newMsg = {
+                                      id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                                      speaker: 'caller' as const,
+                                      text: userText,
+                                      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                                    };
+                                    callSession.addMessage(newMsg);
+                                  }
+
+                                  txEm.persist(callSession);
+                                  await txEm.flush();
+                                  console.log(`[Twilio Stream] User transcript appended/merged to CallSession ${callSession.id}`);
+                                  broadcastDashboardUpdate(tenantId!, { event: 'calls_updated' });
+                                }
+                              });
+                            });
                           }
                         }
 
@@ -294,9 +339,35 @@ Never tell the caller to call another number or try another way; always use the 
                               console.log(`[Twilio Stream] Ignoring streaming agent greeting to avoid duplication: "${agentText}"`);
                             } else {
                               console.log(`[Twilio Stream] Agent Transcription: ${agentText}`);
-                              await callSessionSvc.addMessageToSession(callSid, 'charlotte', agentText);
-                              console.log(`[Twilio Stream] Agent transcript appended/merged to CallSession ${callSid}`);
-                              broadcastDashboardUpdate(tenantId!, { event: 'calls_updated' });
+                              await tenantLocalStorage.run({ tenantId }, async () => {
+                                await runInTenantTransaction(em, async (txEm) => {
+                                  const callSession = await txEm.findOne(CallSession, { callSid });
+                                  if (callSession) {
+                                    const lastMsg = callSession.messages && callSession.messages.length > 0
+                                      ? callSession.messages[callSession.messages.length - 1]
+                                      : null;
+
+                                    if (lastMsg && lastMsg.speaker === 'charlotte') {
+                                      lastMsg.text = `${lastMsg.text} ${agentText}`.trim();
+                                      callSession.messages = [...callSession.messages];
+                                      callSession.updatedAt = new Date();
+                                    } else {
+                                      const newMsg = {
+                                        id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                                        speaker: 'charlotte' as const,
+                                        text: agentText,
+                                        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                                      };
+                                      callSession.addMessage(newMsg);
+                                    }
+
+                                    txEm.persist(callSession);
+                                    await txEm.flush();
+                                    console.log(`[Twilio Stream] Agent transcript appended/merged to CallSession ${callSession.id}`);
+                                    broadcastDashboardUpdate(tenantId!, { event: 'calls_updated' });
+                                  }
+                                });
+                              });
                             }
                           }
                         }
@@ -352,7 +423,7 @@ Never tell the caller to call another number or try another way; always use the 
 
                         // 3. Handle tool/function calls from the model
                         const toolParts = serverMsg.serverContent?.modelTurn?.parts || [];
-                        const functionCalls = toolParts.map((p: { functionCall?: unknown }) => p.functionCall).filter(Boolean) as Array<{ name: string; args: Record<string, unknown>; id: string }>;
+                        const functionCalls = toolParts.map((p: any) => p.functionCall).filter(Boolean);
                         if (functionCalls.length > 0) {
                           for (const fn of functionCalls) {
                             if (fn.name === 'transfer_call') {
@@ -361,20 +432,18 @@ Never tell the caller to call another number or try another way; always use the 
                               isTransferring = true;
 
                               // Acknowledge tool execution back to Gemini
-                              if (geminiSession) {
-                                await geminiSession.sendToolResponse({
-                                  functionResponses: [
-                                    {
-                                      name: 'transfer_call',
-                                      id: fn.id,
-                                      response: {
-                                        status: 'success',
-                                        message: `Successfully transferring call to ${department}.`,
-                                      },
+                              await geminiSession.sendToolResponse({
+                                functionResponses: [
+                                  {
+                                    name: 'transfer_call',
+                                    id: fn.id,
+                                    response: {
+                                      status: 'success',
+                                      message: `Successfully transferring call to ${department}.`,
                                     },
-                                  ],
-                                });
-                              }
+                                  },
+                                ],
+                              });
 
                               // Execute the warm transfer via Twilio REST API
                               if (twilioClient && callSid && activeTenant) {
@@ -382,11 +451,17 @@ Never tell the caller to call another number or try another way; always use the 
                                   // Look up department routing number
                                   let targetNumber = activeTenant.destinationNumber;
                                   try {
-                                    const routingNumber = await voiceToolSvc.lookupDepartmentRoutingNumber(tenantId!, department);
-                                    if (routingNumber) {
-                                      targetNumber = routingNumber;
-                                      console.log(`[Routing] Found department specific routing number: ${targetNumber}`);
-                                    }
+                                    await tenantLocalStorage.run({ tenantId: tenantId! }, async () => {
+                                      const { Department } = await import('../domain/entities/Department.js');
+                                      const dept = await em.fork().findOne(Department, {
+                                        tenant: activeTenant,
+                                        name: { $ilike: department } as any
+                                      });
+                                      if (dept && dept.routingNumber) {
+                                        targetNumber = dept.routingNumber;
+                                        console.log(`[Routing] Found department specific routing number: ${targetNumber}`);
+                                      }
+                                    });
                                   } catch (err) {
                                     console.error('[Routing] Error looking up department routing number:', err);
                                   }
@@ -407,7 +482,7 @@ Never tell the caller to call another number or try another way; always use the 
                                   const isSecure = req.headers['x-forwarded-proto'] === 'https';
                                   const protocol = isSecure ? 'https' : 'http';
                                   const apiBaseUrl = process.env.CHARLOTTE_API_BASE_URL || `${protocol}://${req.headers.host}`;
-                                  const fromNumber = dialedNumber || process.env.TWILIO_FROM_NUMBER || '';
+                                  const fromNumber = dialedNumber || (activeTenant as any).phoneNumber || process.env.TWILIO_FROM_NUMBER || '';
 
                                   // Support SIP URI routing if targetNumber starts with sip:
                                   let outboundTwiml = '';
@@ -448,6 +523,8 @@ Never tell the caller to call another number or try another way; always use the 
                               let crmResponse = 'No customer found with that phone number.';
                               try {
                                 await tenantLocalStorage.run({ tenantId: tenantId! }, async () => {
+                                  const { CustomerService } = await import('../services/CustomerService.js');
+                                  const customerSvc = new CustomerService(em.fork());
                                   const customer = await customerSvc.findByPhoneNumber(phoneNumber);
                                   if (customer) {
                                     crmResponse = `Customer found: ID: ${customer.id}, Name: ${customer.name}. Context: ${customer.context || 'None'}`;
@@ -458,47 +535,63 @@ Never tell the caller to call another number or try another way; always use the 
                                 crmResponse = 'Error occurred while querying the CRM.';
                               }
 
-                              if (geminiSession) {
-                                await geminiSession.sendToolResponse({
-                                  functionResponses: [
-                                    {
-                                      name: 'query_crm',
-                                      id: fn.id,
-                                      response: {
-                                        status: 'success',
-                                        message: crmResponse,
-                                      },
+                              await geminiSession.sendToolResponse({
+                                functionResponses: [
+                                  {
+                                    name: 'query_crm',
+                                    id: fn.id,
+                                    response: {
+                                      status: 'success',
+                                      message: crmResponse,
                                     },
-                                  ],
-                                });
-                              }
+                                  },
+                                ],
+                              });
                             } else if (fn.name === 'list_calendar_events') {
                               const { timeMin, timeMax } = fn.args;
                               console.log(`[Tool Call] Model triggered list_calendar_events: ${timeMin} to ${timeMax}`);
                               let calResponse = '';
                               try {
-                                const events = await voiceToolSvc.listCalendarEvents(tenantId!, timeMin, timeMax) as Array<{ start?: { dateTime?: string, date?: string }, end?: { dateTime?: string, date?: string } }>;
-                                calResponse = JSON.stringify(events.map(e => ({
-                                  start: e.start?.dateTime || e.start?.date,
-                                  end: e.end?.dateTime || e.end?.date,
-                                  summary: 'Busy'
-                                })));
-                              } catch (err: unknown) {
+                                const fork = em.fork();
+                                const tenant = await fork.findOne(Tenant, { id: tenantId });
+                                if (tenant && tenant.googleRefreshToken && tenant.googleCalendarId) {
+                                  const { google } = await import('googleapis');
+                                  const oauth2Client = new google.auth.OAuth2(
+                                    process.env.GOOGLE_CLIENT_ID || 'mock_client_id',
+                                    process.env.GOOGLE_CLIENT_SECRET || 'mock_client_secret'
+                                  );
+                                  oauth2Client.setCredentials({ refresh_token: tenant.googleRefreshToken });
+                                  const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+                                  const response = await calendar.events.list({
+                                    calendarId: tenant.googleCalendarId,
+                                    timeMin,
+                                    timeMax,
+                                    singleEvents: true,
+                                    orderBy: 'startTime',
+                                  });
+                                  const events = response.data.items || [];
+                                  calResponse = JSON.stringify(events.map(e => ({
+                                    start: e.start?.dateTime || e.start?.date,
+                                    end: e.end?.dateTime || e.end?.date,
+                                    summary: 'Busy' // Hide real summary for privacy
+                                  })));
+                                } else {
+                                  calResponse = '[]'; // No calendar connected, assume free
+                                }
+                              } catch (err: any) {
                                 console.error('[Tool Call] Error executing list_calendar_events:', err);
                                 calResponse = 'Failed to fetch calendar events.';
                               }
 
-                              if (geminiSession) {
-                                await geminiSession.sendToolResponse({
-                                  functionResponses: [
-                                    {
-                                      name: 'list_calendar_events',
-                                      id: fn.id,
-                                      response: { status: 'success', events: calResponse },
-                                    },
-                                  ],
-                                });
-                              }
+                              await geminiSession.sendToolResponse({
+                                functionResponses: [
+                                  {
+                                    name: 'list_calendar_events',
+                                    id: fn.id,
+                                    response: { status: 'success', events: calResponse },
+                                  },
+                                ],
+                              });
                             } else if (fn.name === 'book_appointment') {
                               const { customerId, departmentName, dateString } = fn.args;
                               console.log(`[Tool Call] Model triggered book_appointment for: ${customerId}, ${departmentName}, ${dateString}`);
@@ -506,28 +599,28 @@ Never tell the caller to call another number or try another way; always use the 
                               let bookResponse = '';
                               try {
                                 await tenantLocalStorage.run({ tenantId: tenantId! }, async () => {
+                                  const { AppointmentService } = await import('../services/AppointmentService.js');
+                                  const appointmentSvc = new AppointmentService(em.fork());
                                   const appointment = await appointmentSvc.bookAppointment(customerId, departmentName, dateString);
                                   bookResponse = `Appointment successfully booked for ${appointment.date} with ${departmentName}.`;
                                 });
-                              } catch (err: unknown) {
+                              } catch (err: any) {
                                 console.error('[Tool Call] Error executing book_appointment:', err);
-                                bookResponse = `Failed to book appointment: ${err instanceof Error ? err.message : String(err)}. Please ask for a new time.`;
+                                bookResponse = `Failed to book appointment: ${err.message}. Please ask for a new time.`;
                               }
 
-                              if (geminiSession) {
-                                await geminiSession.sendToolResponse({
-                                  functionResponses: [
-                                    {
-                                      name: 'book_appointment',
-                                      id: fn.id,
-                                      response: {
-                                        status: 'success',
-                                        message: bookResponse,
-                                      },
+                              await geminiSession.sendToolResponse({
+                                functionResponses: [
+                                  {
+                                    name: 'book_appointment',
+                                    id: fn.id,
+                                    response: {
+                                      status: 'success',
+                                      message: bookResponse,
                                     },
-                                  ],
-                                });
-                              }
+                                  },
+                                ],
+                              });
                             }
                           }
                         }
@@ -535,10 +628,10 @@ Never tell the caller to call another number or try another way; always use the 
                         console.error('[Gemini] Error handling message:', err);
                       }
                     },
-                    onerror: (err: unknown) => {
+                    onerror: (err: any) => {
                       console.error('[Gemini] WebSocket error:', err);
                     },
-                    onclose: (e: unknown) => {
+                    onclose: (e: any) => {
                       console.log('[Gemini] Connection closed:', e);
                     },
                   },
@@ -546,12 +639,10 @@ Never tell the caller to call another number or try another way; always use the 
 
                 console.log('[Gemini] Connected to Live Voice API. Triggering initial greeting.');
                 try {
-                  if (geminiSession) {
-                    await geminiSession.sendClientContent({
-                      turns: [{ role: 'user', parts: [{ text: "Start the conversation with your greeting." }] }],
-                      turnComplete: true
-                    });
-                  }
+                  await geminiSession.sendClientContent({
+                    turns: [{ role: 'user', parts: [{ text: "Start the conversation with your greeting." }] }],
+                    turnComplete: true
+                  });
                 } catch (err) {
                   console.error('[Gemini] Failed to send initial greeting trigger:', err);
                 }
@@ -587,14 +678,12 @@ Never tell the caller to call another number or try another way; always use the 
               const base64MuLaw = msg.media.payload;
               const geminiPayload = transcodeTwilioToGemini(base64MuLaw);
 
-              if (geminiSession) {
-                await geminiSession.sendRealtimeInput([{
-                  audio: {
-                    data: geminiPayload,
-                    mimeType: 'audio/pcm;rate=16000',
-                  },
-                }]);
-              }
+              await geminiSession.sendRealtimeInput([{
+                audio: {
+                  data: geminiPayload,
+                  mimeType: 'audio/pcm;rate=16000',
+                },
+              }]);
             }
             break;
           }
@@ -636,9 +725,16 @@ Never tell the caller to call another number or try another way; always use the 
       if (callSid && tenantId) {
         try {
           await tenantLocalStorage.run({ tenantId }, async () => {
-            await callSessionSvc.updateCallStatus(callSid, '', 'completed');
-            console.log(`[Twilio Stream] Updated CallSession ${callSid} state to "completed".`);
-            broadcastDashboardUpdate(tenantId!, { event: 'calls_updated' });
+            await runInTenantTransaction(em, async (txEm) => {
+              const callSession = await txEm.findOne(CallSession, { callSid });
+              if (callSession && callSession.status === 'active') {
+                callSession.updateStatus('completed');
+                txEm.persist(callSession);
+                await txEm.flush();
+                console.log(`[Twilio Stream] Updated CallSession ${callSession.id} state to "completed".`);
+                broadcastDashboardUpdate(tenantId!, { event: 'calls_updated' });
+              }
+            });
           });
         } catch (err) {
           console.error('[WebSocket] Error during session teardown database update:', err);
