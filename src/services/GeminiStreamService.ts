@@ -46,7 +46,7 @@ export class GeminiStreamService {
         this.geminiSession = await this.ai.live.connect({
           model,
           config: {
-            responseModalities: ['AUDIO' as any],
+            responseModalities: ['AUDIO' as const],
             speechConfig: {
               voiceConfig: {
                 prebuiltVoiceConfig: {
@@ -388,7 +388,7 @@ Never tell the caller to call another number or try another way; always use the 
     } else if (fn.name === 'list_calendar_events') {
       const { timeMin, timeMax } = fn.args as { timeMin: string; timeMax: string };
       console.log(`[Tool Call] Model triggered list_calendar_events: ${timeMin} to ${timeMax}`);
-      let calResponse = '';
+      let calResponse: string;
       try {
         const events = await this.voiceToolSvc.listCalendarEvents(this.tenantId, timeMin, timeMax) as Array<{ start?: { dateTime?: string, date?: string }, end?: { dateTime?: string, date?: string } }>;
         calResponse = JSON.stringify(events.map(e => ({
@@ -452,7 +452,7 @@ Never tell the caller to call another number or try another way; always use the 
           data: geminiPayload,
           mimeType: 'audio/pcm;rate=16000',
         },
-      }] as any);
+      }]);
     }
   }
 

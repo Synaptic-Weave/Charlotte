@@ -140,7 +140,8 @@ export function registerStreamHandler(wss: WebSocketServer, callSessionSvc: Call
                 console.log(`[Twilio Stream] Using dialed phone number from custom parameters: ${dialedNumber}`);
               }
 
-              const greetingText = (tenant as any).agentGreeting || "Hello, how can I help you today?";
+              const tenantObj = tenant as unknown as { agentGreeting?: string };
+              const greetingText = tenantObj?.agentGreeting || "Hello, how can I help you today?";
               await callSessionSvc.updateCallStatus(callSid!, streamSid!, 'active', greetingText);
               console.log(`[Twilio Stream] Updated CallSession for CallSid ${callSid} state to "active" and appended welcome greeting.`);
               broadcastDashboardUpdate(tenantId!, { event: 'calls_updated' });
