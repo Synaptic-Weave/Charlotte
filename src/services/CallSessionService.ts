@@ -292,6 +292,11 @@ export class CallSessionService {
     return phoneRecord.tenant.id;
   }
 
+  async getFirstTenant(): Promise<Tenant | null> {
+    const fork = this.em.fork();
+    return await fork.findOne(Tenant, {});
+  }
+
   async updateRecordingUrl(callSid: string, recordingUrl: string): Promise<void> {
     const fork = this.em.fork();
     const callSession = await fork.findOne(CallSession, { callSid }, { populate: ['tenant'] });
