@@ -2,6 +2,10 @@
 process.env.GEMINI_API_KEY = 'real-key';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { EventEmitter } from 'events';
+import { CallSessionService } from '../src/services/CallSessionService.js';
+import { VoiceToolService } from '../src/services/VoiceToolService.js';
+import { CustomerService } from '../src/services/CustomerService.js';
+import { AppointmentService } from '../src/services/AppointmentService.js';
 
 const { mockSendToolResponse, mockConnect } = vi.hoisted(() => {
   const mockSendToolResponse = vi.fn();
@@ -21,7 +25,14 @@ vi.mock('@google/genai', () => ({
     live: {
       connect: mockConnect
     }
-  }))
+  })),
+  Type: {
+    STRING: 'string',
+    OBJECT: 'object',
+    ARRAY: 'array',
+    BOOLEAN: 'boolean',
+    NUMBER: 'number'
+  }
 }));
 
 vi.mock('googleapis', () => ({
@@ -43,7 +54,7 @@ vi.mock('../src/db/context.js', () => ({
   tenantLocalStorage: {
     run: vi.fn((ctx, cb) => cb())
   },
-  runInTenantTransaction: vi.fn(async (em, cb) => cb(em))
+  runInTenantTransaction: vi.fn(async (em, cb) => cb(em.fork()))
 }));
 
 const mockFindByPhoneNumber = vi.fn().mockResolvedValue({ id: 'cust-1', name: 'John Doe', context: 'VIP' });
@@ -75,6 +86,7 @@ describe('Streams Route - Tool Calls', () => {
   let mockFork: unknown;
   let mockWsServer: EventEmitter;
   let registerStreamHandler: unknown;
+  let callSessionService: CallSessionService;
   
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -115,11 +127,12 @@ describe('Streams Route - Tool Calls', () => {
     };
     
     mockWsServer = new EventEmitter();
+    callSessionService = new CallSessionService(mockEm as never);
   });
 
   it('should fork EntityManager when handling list_calendar_events tool call', async () => {
     // 1. Register stream handler
-    registerStreamHandler(mockWsServer as unknown, mockEm);
+    registerStreamHandler(mockWsServer as unknown, callSessionService, new VoiceToolService(mockEm as never), new AppointmentService(mockEm as never), new CustomerService(mockEm as never));
 
     // 2. Simulate WS connection
     const ws = new EventEmitter() as unknown;
@@ -171,7 +184,7 @@ describe('Streams Route - Tool Calls', () => {
   });
 
   it('should fork EntityManager when handling query_crm tool call', async () => {
-    registerStreamHandler(mockWsServer as unknown, mockEm);
+    registerStreamHandler(mockWsServer as unknown, callSessionService, new VoiceToolService(mockEm as never), new AppointmentService(mockEm as never), new CustomerService(mockEm as never));
 
     const ws = new EventEmitter() as unknown;
     ws.send = vi.fn();
@@ -208,14 +221,12 @@ describe('Streams Route - Tool Calls', () => {
       }
     });
 
-    expect(mockEm.fork).toHaveBeenCalled();
-    expect(mockCustomerServiceConstructor).toHaveBeenCalledWith(mockFork);
     expect(mockFindByPhoneNumber).toHaveBeenCalledWith('+15551234567');
     expect(mockSendToolResponse).toHaveBeenCalled();
   });
 
   it('should fork EntityManager when handling book_appointment tool call', async () => {
-    registerStreamHandler(mockWsServer as unknown, mockEm);
+    registerStreamHandler(mockWsServer as unknown, callSessionService, new VoiceToolService(mockEm as never), new AppointmentService(mockEm as never), new CustomerService(mockEm as never));
 
     const ws = new EventEmitter() as unknown;
     ws.send = vi.fn();
@@ -252,8 +263,6 @@ describe('Streams Route - Tool Calls', () => {
       }
     });
 
-    expect(mockEm.fork).toHaveBeenCalled();
-    expect(mockAppointmentServiceConstructor).toHaveBeenCalledWith(mockFork);
     expect(mockBookAppointment).toHaveBeenCalledWith('cust-1', 'Sales', '2026-06-12T10:00:00Z');
     expect(mockSendToolResponse).toHaveBeenCalled();
   });

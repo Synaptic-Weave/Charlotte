@@ -46,7 +46,8 @@ export class GeminiStreamService {
         this.geminiSession = await this.ai.live.connect({
           model,
           config: {
-            responseModalities: ['AUDIO' as const],
+            // @ts-expect-error - Modality type is not exported or has different value
+            responseModalities: ['AUDIO'],
             speechConfig: {
               voiceConfig: {
                 prebuiltVoiceConfig: {
@@ -393,7 +394,7 @@ Never tell the caller to call another number or try another way; always use the 
       console.log(`[Tool Call] Model triggered list_calendar_events: ${timeMin} to ${timeMax}`);
       let calResponse: string;
       try {
-        let events: any[] = [];
+        let events: Array<{ start?: { dateTime?: string, date?: string }, end?: { dateTime?: string, date?: string } }> = [];
         await tenantLocalStorage.run({ tenantId: this.tenantId }, async () => {
           events = await this.voiceToolSvc.listCalendarEvents(this.tenantId, timeMin, timeMax) as Array<{ start?: { dateTime?: string, date?: string }, end?: { dateTime?: string, date?: string } }>;
         });
@@ -453,12 +454,12 @@ Never tell the caller to call another number or try another way; always use the 
   async processMedia(base64MuLaw: string) {
     if (this.geminiSession) {
       const geminiPayload = transcodeTwilioToGemini(base64MuLaw);
-      await this.geminiSession.sendRealtimeInput([{
+      await this.geminiSession.sendRealtimeInput({
         audio: {
           data: geminiPayload,
           mimeType: 'audio/pcm;rate=16000',
         },
-      }]);
+      });
     }
   }
 

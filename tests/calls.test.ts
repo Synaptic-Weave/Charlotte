@@ -4,6 +4,7 @@ import express from 'express';
 import http from 'http';
 import jwt from 'jsonwebtoken';
 import { Client } from 'pg';
+import { CallSessionService } from '../src/services/CallSessionService.js';
 import { MikroORM } from '@mikro-orm/postgresql';
 import config from '../src/mikro-orm.config.js';
 import { Tenant } from '../src/domain/entities/Tenant.js';
@@ -92,6 +93,14 @@ describe('Charlotte Calls & Transcript RLS Endpoint Integration Tests', () => {
       await superOrm.em.execute('ALTER TABLE users ENABLE ROW LEVEL SECURITY;');
       await superOrm.em.execute('ALTER TABLE call_sessions ENABLE ROW LEVEL SECURITY;');
       await superOrm.em.execute('ALTER TABLE call_sessions FORCE ROW LEVEL SECURITY;');
+
+      // 1.5. Seed Isolated Tenant A & B Data using superOrm to bypass RLS for initial creation
+      tenantA = Tenant.create('Tenant A - Acme Corp', '+15551112222');
+      tenantB = Tenant.create('Tenant B - Stark Industries', '+15553334444');
+      userA = User.create(tenantA, 'user-a@acme.com', 'hashed_pwd_a', 'admin');
+      userB = User.create(tenantB, 'user-b@stark.com', 'hashed_pwd_b', 'admin');
+      
+      await superOrm.em.fork().persistAndFlush([tenantA, tenantB, userA, userB]);
     } finally {
       await superOrm.close();
     }
@@ -100,7 +109,16 @@ describe('Charlotte Calls & Transcript RLS Endpoint Integration Tests', () => {
     const superClient = new Client({ connectionString: dbSuperUrl });
     await superClient.connect();
     try {
+      await superClient.query('DROP OWNED BY charlotte_calls_test_role;');
+    } catch (e) {
+      // Ignore if role doesn't exist
+    }
+    try {
       await superClient.query('DROP ROLE IF EXISTS charlotte_calls_test_role;');
+    } catch (e) {
+      // Ignore
+    }
+    try {
       await superClient.query("CREATE ROLE charlotte_calls_test_role WITH LOGIN PASSWORD 'test_password';");
       await superClient.query('GRANT ALL PRIVILEGES ON DATABASE charlotte_db TO charlotte_calls_test_role;');
       await superClient.query('GRANT USAGE ON SCHEMA public TO charlotte_calls_test_role;');
@@ -123,25 +141,7 @@ describe('Charlotte Calls & Transcript RLS Endpoint Integration Tests', () => {
       entitiesTs: [TenantSchema, UserSchema, CallSessionSchema, OrganizationSchema, TwilioPhoneNumberSchema],
     });
 
-    // 4. Seed Isolated Tenant A & B Data
-    tenantA = Tenant.create('Tenant A - Acme Corp', '+15551112222');
-    tenantB = Tenant.create('Tenant B - Stark Industries', '+15553334444');
 
-    await tenantLocalStorage.run({ tenantId: tenantA.id }, async () => {
-      await runInTenantTransaction(orm.em, async (txEm) => {
-        userA = User.create(tenantA, 'user-a@acme.com', 'hashed_pwd_a', 'admin');
-        txEm.persist([tenantA, userA]);
-        await txEm.flush();
-      });
-    });
-
-    await tenantLocalStorage.run({ tenantId: tenantB.id }, async () => {
-      await runInTenantTransaction(orm.em, async (txEm) => {
-        userB = User.create(tenantB, 'user-b@stark.com', 'hashed_pwd_b', 'admin');
-        txEm.persist([tenantB, userB]);
-        await txEm.flush();
-      });
-    });
 
     // 5. Generate JWT tokens
     tokenA = jwt.sign(
@@ -159,7 +159,7 @@ describe('Charlotte Calls & Transcript RLS Endpoint Integration Tests', () => {
     // 6. Initialize Express Server
     const app = express();
     app.use(express.json());
-    app.use('/api/tenants/calls', createCallsRouter(orm.em));
+    app.use('/api/tenants/calls', createCallsRouter(new CallSessionService(orm.em)));
 
     server = http.createServer(app);
     await new Promise<void>((resolve) => server.listen(0, () => resolve()));

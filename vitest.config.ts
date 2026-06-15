@@ -2,7 +2,7 @@ import { defineConfig, configDefaults } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    exclude: [...configDefaults.exclude, 'e2e/**', '.claude/**', '.gemini/**'],
+    exclude: [...configDefaults.exclude, 'e2e/**', '.claude/**', '.gemini/**', '.scratch/**'],
     alias: [
       { find: /^(.*)\.js$/, replacement: '$1' }
     ],

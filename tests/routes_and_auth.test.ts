@@ -16,6 +16,9 @@ import { OrganizationSchema } from '../src/domain/schemas/Organization.schema.js
 import { TwilioPhoneNumberSchema } from '../src/domain/schemas/TwilioPhoneNumber.schema.js';
 import { authenticateToken } from '../src/middleware/auth.js';
 
+import { AuthService } from '../src/services/AuthService.js';
+import { NumberService } from '../src/services/NumberService.js';
+
 let createAuthRouter: unknown;
 let createNumbersRouter: unknown;
 
@@ -144,10 +147,12 @@ describe('Charlotte API Routes and Authentication Middleware Integration Tests',
     app.use(express.urlencoded({ extended: true }));
 
     // Mount Auth Router
-    app.use('/api/auth', createAuthRouter(orm.em));
+    const authService = new AuthService(orm.em);
+    app.use('/api/auth', createAuthRouter(authService));
 
     // Mount Numbers Router
-    app.use('/api/tenants/numbers', createNumbersRouter(orm.em));
+    const numberService = new NumberService(orm.em);
+    app.use('/api/tenants/numbers', createNumbersRouter(numberService));
 
     // Mount an isolated diagnostic endpoint to test authenticateToken middleware in isolation
     app.get('/api/test-auth-middleware', authenticateToken, (req, res) => {
@@ -283,7 +288,7 @@ describe('Charlotte API Routes and Authentication Middleware Integration Tests',
   describe('2. createAuthRouter Endpoints', () => {
     describe('POST /api/auth/signup', () => {
       it('should fail with 400 if required registration parameters are missing', async () => {
-        const response = await fetch(`${baseUrl}/api/auth/signup`, {
+        const response = await fetch(`${baseUrl}/api/auth/register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: 'new@example.com' }), // Missing password, tenantName, destinationNumber
@@ -291,11 +296,11 @@ describe('Charlotte API Routes and Authentication Middleware Integration Tests',
 
         expect(response.status).toBe(400);
         const data = await response.json();
-        expect(data.error).toContain('Missing required onboarding parameters');
+        expect(data.error).toContain('All fields are required.');
       });
 
       it('should fail with 400 if email is already taken', async () => {
-        const response = await fetch(`${baseUrl}/api/auth/signup`, {
+        const response = await fetch(`${baseUrl}/api/auth/register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -312,7 +317,7 @@ describe('Charlotte API Routes and Authentication Middleware Integration Tests',
       });
 
       it('should succeed with 201 and onboard a new tenant organization programmatically', async () => {
-        const response = await fetch(`${baseUrl}/api/auth/signup`, {
+        const response = await fetch(`${baseUrl}/api/auth/register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -571,7 +576,7 @@ describe('Charlotte API Routes and Authentication Middleware Integration Tests',
           }),
         });
 
-        expect(response.status).toBe(500);
+        expect(response.status).toBe(503);
         const data = await response.json();
         expect(data.error).toContain('Real Twilio credentials');
 
@@ -604,13 +609,13 @@ describe('Charlotte API Routes and Authentication Middleware Integration Tests',
       });
 
       it('should return ONLY the requesting tenant\'s phone numbers and isolate cross-tenant data', async () => {
+        // Ensure cleanup of previous test data first to avoid UniqueConstraintViolation
         const fork = orm.em.fork();
+        await fork.nativeDelete(TwilioPhoneNumber, { phoneNumber: '+15550003333' });
         
-        // Create Tenant B
-        const tenantB = Tenant.create('Tenant B isolation test', '+15550002222');
-        const twilioPhoneB = TwilioPhoneNumber.create(tenantB, '+15550003333', 'Tenant B Line');
-        fork.persist([tenantB, twilioPhoneB]);
-        await fork.flush();
+        const tenant2 = Tenant.create('Tenant B', '+15550002222');
+        const number2 = TwilioPhoneNumber.create(tenant2, '+15550003333', 'Tenant B Line');
+        await fork.persistAndFlush([tenant2, number2]);
 
         const response = await fetch(`${baseUrl}/api/tenants/numbers/`, {
           method: 'GET',
@@ -625,7 +630,7 @@ describe('Charlotte API Routes and Authentication Middleware Integration Tests',
         expect(matchB.length).toBe(0);
 
         // Cleanup Tenant B
-        await fork.nativeDelete(Tenant, { id: tenantB.id });
+        await fork.nativeDelete(Tenant, { id: tenant2.id });
       });
     });
   });

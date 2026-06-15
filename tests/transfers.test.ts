@@ -6,6 +6,7 @@ import { WebSocket, WebSocketServer } from 'ws';
 import { Client } from 'pg';
 import { MikroORM } from '@mikro-orm/postgresql';
 import config from '../src/mikro-orm.config.js';
+import { CallSessionService } from '../src/services/CallSessionService.js';
 import { Tenant } from '../src/domain/entities/Tenant.js';
 import { TwilioPhoneNumber } from '../src/domain/entities/TwilioPhoneNumber.js';
 import { CallSession } from '../src/domain/entities/CallSession.js';
@@ -43,10 +44,17 @@ vi.mock('@google/genai', () => {
               }
             }, 10);
             return storedSession;
-          }),
-        },
+          })
+        }
       };
     }),
+    Type: {
+      STRING: 'string',
+      OBJECT: 'object',
+      ARRAY: 'array',
+      BOOLEAN: 'boolean',
+      NUMBER: 'number'
+    }
   };
 });
 
@@ -174,13 +182,14 @@ describe('Charlotte Warm Transfer & Call Bridging Integration Tests', () => {
     app.use(express.urlencoded({ extended: true }));
 
     // Inject Webhooks router
-    app.use('/api/webhook', createWebhooksRouter(orm.em));
+    const callSessionService = new CallSessionService(orm.em);
+    app.use('/api/webhook', createWebhooksRouter(callSessionService));
 
     server = http.createServer(app);
     wss = new WebSocketServer({ server });
 
     // Register stream handler
-    registerStreamHandler(wss, orm.em);
+    registerStreamHandler(wss, callSessionService);
 
     await new Promise<void>((resolve) => server.listen(0, () => resolve()));
     port = (server.address() as unknown).port;

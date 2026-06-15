@@ -1,7 +1,7 @@
 import { EntityManager } from '@mikro-orm/postgresql';
 
 import jwt from 'jsonwebtoken';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { Tenant } from '../domain/entities/Tenant.js';
 import { User } from '../domain/entities/User.js';
 import { Organization } from '../domain/entities/Organization.js';

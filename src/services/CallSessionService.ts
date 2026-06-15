@@ -294,7 +294,8 @@ export class CallSessionService {
 
   async getFirstTenant(): Promise<Tenant | null> {
     const fork = this.em.fork();
-    return await fork.findOne(Tenant, {});
+    const tenants = await fork.find(Tenant, {}, { limit: 1 });
+    return tenants[0] || null;
   }
 
   async updateRecordingUrl(callSid: string, recordingUrl: string): Promise<void> {

@@ -39,22 +39,21 @@ import { createIntegrationsRouter } from '../src/routes/integrations.js';
 describe('Integrations Router (Unit)', () => {
   let server: http.Server;
   let baseUrl: string;
-  let mockEm: unknown;
-  let mockFork: unknown;
+  let mockIntegrationService: unknown;
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    mockFork = {
-      findOne: vi.fn(),
-      flush: vi.fn()
-    };
-    mockEm = {
-      fork: vi.fn().mockReturnValue(mockFork)
+    mockIntegrationService = {
+      generateAuthUrl: vi.fn().mockReturnValue('http://mock-google-auth-url'),
+      verifyStateToken: vi.fn().mockResolvedValue('test-tenant-id'),
+      exchangeToken: vi.fn().mockResolvedValue(undefined),
+      getCalendars: vi.fn().mockResolvedValue([{ id: 'cal1' }]),
+      updateGoogleCalendarId: vi.fn().mockResolvedValue(undefined),
     };
     
     const app = express();
     app.use(express.json());
-    app.use('/api/integrations', createIntegrationsRouter(mockEm));
+    app.use('/api/integrations', createIntegrationsRouter(mockIntegrationService));
     
     server = http.createServer(app);
     await new Promise<void>((resolve) => server.listen(0, () => resolve()));
@@ -71,33 +70,27 @@ describe('Integrations Router (Unit)', () => {
   describe('GET /api/integrations/google/auth', () => {
     it('should properly read req.context.tenantId instead of req.user.tenantId to generate auth url', async () => {
       const response = await fetch(`${baseUrl}/api/integrations/google/auth`);
-      
       expect(response.status).toBe(200);
       const data = await response.json();
       expect(data).toEqual({ url: 'http://mock-google-auth-url' });
-      expect(mockGenerateAuthUrl).toHaveBeenCalledWith(expect.objectContaining({
-        state: 'test-tenant-id' // asserts that it read from context properly
-      }));
+      expect(mockIntegrationService.generateAuthUrl).toHaveBeenCalledWith('test-tenant-id');
     });
   });
 
   describe('GET /api/integrations/google/calendars', () => {
     it('should read req.context.tenantId to fetch tenant and return calendars', async () => {
-      mockFork.findOne.mockResolvedValue({ id: 'test-tenant-id', googleRefreshToken: 'valid_token' });
-      
       const response = await fetch(`${baseUrl}/api/integrations/google/calendars`);
       
       expect(response.status).toBe(200);
       const data = await response.json();
       expect(data).toEqual({ calendars: [{ id: 'cal1' }] });
       
-      // Ensure it queried using tenantId from req.context using the forked em
-      expect(mockEm.fork).toHaveBeenCalled();
-      expect(mockFork.findOne).toHaveBeenCalledWith(expect.anything(), { id: 'test-tenant-id' });
+      // Ensure it queried using tenantId from req.context
+      expect(mockIntegrationService.getCalendars).toHaveBeenCalledWith('test-tenant-id');
     });
 
     it('should return 400 if tenant not found or missing googleRefreshToken', async () => {
-      mockFork.findOne.mockResolvedValue(null);
+      mockIntegrationService.getCalendars.mockRejectedValue(new Error('Google Calendar not connected'));
       
       const response = await fetch(`${baseUrl}/api/integrations/google/calendars`);
       
@@ -108,9 +101,7 @@ describe('Integrations Router (Unit)', () => {
   });
 
   describe('POST /api/integrations/google/callback', () => {
-    it('should fork EntityManager and flush on success', async () => {
-      mockFork.findOne.mockResolvedValue({ id: 'test-tenant-id' });
-      
+    it('should call exchangeToken on success', async () => {
       const response = await fetch(`${baseUrl}/api/integrations/google/callback`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -118,16 +109,13 @@ describe('Integrations Router (Unit)', () => {
       });
       
       expect(response.status).toBe(200);
-      expect(mockEm.fork).toHaveBeenCalled();
-      expect(mockFork.findOne).toHaveBeenCalledWith(expect.anything(), { id: 'test-tenant-id' });
-      expect(mockFork.flush).toHaveBeenCalled();
+      expect(mockIntegrationService.verifyStateToken).toHaveBeenCalledWith('test-tenant-id');
+      expect(mockIntegrationService.exchangeToken).toHaveBeenCalledWith('mock-code', 'test-tenant-id');
     });
   });
 
   describe('POST /api/integrations/google/calendars', () => {
-    it('should fork EntityManager and flush on success', async () => {
-      mockFork.findOne.mockResolvedValue({ id: 'test-tenant-id' });
-      
+    it('should call updateGoogleCalendarId on success', async () => {
       const response = await fetch(`${baseUrl}/api/integrations/google/calendars`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -135,9 +123,7 @@ describe('Integrations Router (Unit)', () => {
       });
       
       expect(response.status).toBe(200);
-      expect(mockEm.fork).toHaveBeenCalled();
-      expect(mockFork.findOne).toHaveBeenCalledWith(expect.anything(), { id: 'test-tenant-id' });
-      expect(mockFork.flush).toHaveBeenCalled();
+      expect(mockIntegrationService.updateGoogleCalendarId).toHaveBeenCalledWith('test-tenant-id', 'new-cal-id');
     });
   });
 });
