@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
+
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { MikroORM } from '@mikro-orm/postgresql';
 import { Client } from 'pg';
@@ -212,7 +212,7 @@ describe('PostgreSQL Row-Level Security (RLS) Integration Tests', () => {
           await superClient.query('ALTER TABLE call_sessions DISABLE ROW LEVEL SECURITY;');
           
           if (tenantA && tenantB) {
-            const res = await superClient.query(
+            await superClient.query(
               'DELETE FROM tenants WHERE id IN ($1, $2)',
               [tenantA.id, tenantB.id]
             );
