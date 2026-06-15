@@ -6,8 +6,9 @@ import { Tenant } from '../domain/entities/Tenant.js';
 import { User } from '../domain/entities/User.js';
 import { Organization } from '../domain/entities/Organization.js';
 import { tenantLocalStorage, runInTenantTransaction } from '../db/context.js';
+import { requireEnv } from '../utils/env.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev-only-123';
+const JWT_SECRET = requireEnv('JWT_SECRET');
 
 export class AuthService {
   constructor(private readonly em: EntityManager) {}

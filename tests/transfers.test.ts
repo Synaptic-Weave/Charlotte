@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
+
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import express from 'express';
 import http from 'http';
@@ -62,7 +62,7 @@ vi.mock('@google/genai', () => {
 export const mockCallsCreate = vi.fn().mockResolvedValue({ sid: 'CA_OUTBOUND_MOCK_123' });
 export const mockCallsUpdate = vi.fn().mockResolvedValue({ sid: 'CA_INBOUND_MOCK_UPDATED' });
 
-const mockCalls = vi.fn((sid) => {
+const mockCalls = vi.fn((_sid) => {
   return {
     update: mockCallsUpdate,
   };
