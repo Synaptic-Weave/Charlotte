@@ -4,7 +4,7 @@
   "description": "Charlotte — AI-powered virtual receptionist built on Google Agent Development Kit (ADK) and Twilio.",
   "main": "dist/server.js",
   "scripts": {
-    "build": "tsc",
+    "build": "npx -y rimraf dist && tsc",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
     "test": "vitest run",

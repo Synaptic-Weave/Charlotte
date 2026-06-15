@@ -88,7 +88,9 @@ jobs:
         run: |
           gcloud run jobs update charlotte-db-migrate \
             --region ${{ env.REGION }} \
-            --image ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+            --image ${{ env.BACKEND_IMAGE }}:${{ github.sha }} \
+            --command="npm" \
+            --args="run,migrate"
 
           gcloud run jobs execute charlotte-db-migrate \
             --region ${{ env.REGION }} \
@@ -144,7 +146,9 @@ jobs:
         run: |
           gcloud run jobs update charlotte-db-migrate \
             --region ${{ env.REGION }} \
-            --image ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+            --image ${{ env.BACKEND_IMAGE }}:${{ github.sha }} \
+            --command="npm" \
+            --args="run,migrate"
 
           gcloud run jobs execute charlotte-db-migrate \
             --region ${{ env.REGION }} \
