@@ -45,6 +45,11 @@ export function createWebhooksRouter(callSessionService: CallSessionService): Ro
 
       console.log(`[Webhook] Inbound call received. SID: ${callSid}, To: ${dialedNumber}, From: ${callerNumber}`);
 
+      if (!callSid || !dialedNumber || !callerNumber) {
+        res.status(400).send('Missing required Twilio webhook parameters');
+        return;
+      }
+
       // 1. Resolve tenant context from dialed number
       let tenantId = await callSessionService.findTenantIdByPhoneNumber(dialedNumber);
 

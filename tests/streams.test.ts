@@ -6,6 +6,7 @@ import { WebSocket, WebSocketServer } from 'ws';
 import { Client } from 'pg';
 import { MikroORM } from '@mikro-orm/postgresql';
 import config from '../src/mikro-orm.config.js';
+import { CallSessionService } from '../src/services/CallSessionService.js';
 import { Tenant } from '../src/domain/entities/Tenant.js';
 import { TwilioPhoneNumber } from '../src/domain/entities/TwilioPhoneNumber.js';
 import { CallSession } from '../src/domain/entities/CallSession.js';
@@ -130,13 +131,14 @@ describe('Charlotte Telephony Inbound Call Webhook & WebSocket Media Stream Brid
     app.use(express.urlencoded({ extended: true }));
 
     // Register Webhook endpoints
-    app.use('/api/webhook', createWebhooksRouter(orm.em));
+    const callSessionService = new CallSessionService(orm.em);
+    app.use('/api/webhook', createWebhooksRouter(callSessionService));
 
     server = http.createServer(app);
     wss = new WebSocketServer({ server });
 
     // Register WebSocket streaming route
-    registerStreamHandler(wss, orm.em);
+    registerStreamHandler(wss, callSessionService);
 
     // Bind HTTP server to dynamic free port assigned by the OS
     await new Promise<void>((resolve) => server.listen(0, () => resolve()));
@@ -184,6 +186,7 @@ describe('Charlotte Telephony Inbound Call Webhook & WebSocket Media Stream Brid
         body: JSON.stringify({
           To: '+18005559999', // Unknown unprovisioned number
           CallSid: 'CA_UNKNOWN_SID_001',
+          From: '+15550004444',
         }),
       });
 
@@ -203,6 +206,7 @@ describe('Charlotte Telephony Inbound Call Webhook & WebSocket Media Stream Brid
         body: JSON.stringify({
           To: '+15125550200', // Our seeded active number
           CallSid: callSid,
+          From: '+15550004444',
         }),
       });
 

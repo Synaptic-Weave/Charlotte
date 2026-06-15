@@ -139,6 +139,26 @@ describe('PostgreSQL Row-Level Security (RLS) Integration Tests', () => {
       await superOrm.em.execute('ALTER TABLE organizations FORCE ROW LEVEL SECURITY;');
       await superOrm.em.execute('ALTER TABLE twilio_phone_numbers FORCE ROW LEVEL SECURITY;');
       await superOrm.em.execute('ALTER TABLE call_sessions FORCE ROW LEVEL SECURITY;');
+
+      // 2.5 Seed Isolated Tenant A & B Data using superOrm to bypass RLS for initial creation
+      tenantA = Tenant.create('Tenant A - Acme Corp', '+15551002001');
+      userA = User.create(tenantA, 'admin@acme.com', 'hashed_pwd_acme', 'admin');
+      orgA = Organization.create(tenantA, 'Acme Engineering');
+      const phoneA = TwilioPhoneNumber.create(tenantA, '+15125550100', 'Acme Hotline');
+      sessionA = CallSession.create(tenantA, 'CA_RLS_TEST_ACME_001');
+      const customerA = Customer.create(tenantA, 'Alice', '+15550001111', 'Acme VIP');
+
+      tenantB = Tenant.create('Tenant B - Stark Industries', '+15552003002');
+      userB = User.create(tenantB, 'admin@stark.com', 'hashed_pwd_stark', 'admin');
+      orgB = Organization.create(tenantB, 'Stark R&D');
+      const phoneB = TwilioPhoneNumber.create(tenantB, '+15125550101', 'Stark Hotline');
+      sessionB = CallSession.create(tenantB, 'CA_RLS_TEST_STARK_001');
+      const customerB = Customer.create(tenantB, 'Bob', '+15550002222', 'Stark VIP');
+
+      await superOrm.em.fork().persistAndFlush([
+        tenantA, userA, orgA, phoneA, sessionA, customerA,
+        tenantB, userB, orgB, phoneB, sessionB, customerB
+      ]);
     } finally {
       await superOrm.close();
     }
@@ -170,38 +190,6 @@ describe('PostgreSQL Row-Level Security (RLS) Integration Tests', () => {
       entities: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema, CallSessionSchema, CustomerSchema],
       entitiesTs: [TenantSchema, UserSchema, OrganizationSchema, TwilioPhoneNumberSchema, CallSessionSchema, CustomerSchema],
     });
-
-    // 5. Seed Isolated Tenant A Data
-    tenantA = Tenant.create('Tenant A - Acme Corp', '+15551002001');
-    await tenantLocalStorage.run({ tenantId: tenantA.id }, async () => {
-      await runInTenantTransaction(orm.em, async (txEm) => {
-        userA = User.create(tenantA, 'admin@acme.com', 'hashed_pwd_acme', 'admin');
-        orgA = Organization.create(tenantA, 'Acme Engineering');
-        const phoneA = TwilioPhoneNumber.create(tenantA, '+15125550100', 'Acme Hotline');
-        sessionA = CallSession.create(tenantA, 'CA_RLS_TEST_ACME_001');
-        const customerA = Customer.create(tenantA, 'Alice', '+15550001111', 'Acme VIP');
-
-        txEm.persist([tenantA, userA, orgA, phoneA, sessionA, customerA]);
-        await txEm.flush();
-      });
-    });
-
-    // 6. Seed Isolated Tenant B Data
-    tenantB = Tenant.create('Tenant B - Stark Industries', '+15552003002');
-    await tenantLocalStorage.run({ tenantId: tenantB.id }, async () => {
-      await runInTenantTransaction(orm.em, async (txEm) => {
-        userB = User.create(tenantB, 'admin@stark.com', 'hashed_pwd_stark', 'admin');
-        orgB = Organization.create(tenantB, 'Stark R&D');
-        const phoneB = TwilioPhoneNumber.create(tenantB, '+15125550101', 'Stark Hotline');
-        sessionB = CallSession.create(tenantB, 'CA_RLS_TEST_STARK_001');
-        const customerB = Customer.create(tenantB, 'Bob', '+15550002222', 'Stark VIP');
-
-        txEm.persist([tenantB, userB, orgB, phoneB, sessionB, customerB]);
-        await txEm.flush();
-      });
-    });
-
-    console.log('Test seeding completed under non-superuser role.');
   });
 
   afterAll(async () => {
